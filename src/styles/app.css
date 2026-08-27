@@ -200,3 +200,168 @@ body {
     transition-duration: 0.01ms !important;
   }
 }
+
+/* Failure notice on the bare trunk */
+
+.notice--failure {
+  border-left-color: var(--mulberry);
+  background: color-mix(in srgb, var(--mulberry) 10%, transparent);
+}
+
+.action:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+.explanation__actions {
+  display: flex;
+  gap: 0.75rem;
+  margin-top: 1.5rem;
+}
+
+/*
+ * The Garden workspace (ADR 0019): the Tree takes roughly two thirds and the
+ * selected item opens beside it. The Change Tray, Garden Activity feed, and
+ * Agent Access bar join this layout in later tickets.
+ */
+
+.workspace {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.workspace__bar {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.6rem 1.25rem;
+  border-bottom: 1px solid color-mix(in srgb, var(--lichen) 55%, transparent);
+  font-family: var(--metadata);
+  font-size: 0.8rem;
+}
+
+.workspace__repository {
+  color: color-mix(in srgb, var(--bark) 75%, transparent);
+}
+
+.workspace__panes {
+  display: grid;
+  grid-template-columns: 2fr minmax(20rem, 1fr);
+  flex: 1;
+  min-height: 0;
+}
+
+.workspace__tree {
+  min-width: 0;
+  padding: 1.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  /* The Tree is drawn at natural size; ticket 08 replaces this with pan and zoom. */
+  overflow: auto;
+}
+
+.garden-tree {
+  flex: none;
+}
+
+.garden-tree__links path {
+  fill: none;
+  stroke: var(--bark);
+  stroke-width: 2;
+  stroke-opacity: 0.5;
+}
+
+.garden-tree__node {
+  cursor: pointer;
+}
+
+.garden-tree__junction {
+  fill: var(--canvas);
+  stroke: var(--canopy);
+  stroke-width: 2.5;
+}
+
+.garden-tree__node--selected .garden-tree__junction {
+  fill: var(--canopy);
+}
+
+.garden-tree__label {
+  font-family: var(--control);
+  font-size: 14px;
+  fill: var(--bark);
+  /* A canvas-coloured halo so a label stays readable where a limb passes behind it. */
+  paint-order: stroke;
+  stroke: var(--canvas);
+  stroke-width: 4px;
+  stroke-linejoin: round;
+}
+
+.garden-tree__node--selected .garden-tree__label {
+  font-weight: 600;
+}
+
+.garden-tree__node:focus-visible {
+  outline: 2px solid var(--pollen);
+  outline-offset: 4px;
+}
+
+/* Selected-item panel (ADR 0041) */
+
+.item-panel {
+  border-left: 1px solid color-mix(in srgb, var(--lichen) 55%, transparent);
+  padding: 1.5rem;
+  overflow-y: auto;
+  min-width: 0;
+}
+
+.item-panel--empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.item-panel__invitation {
+  font-family: var(--control);
+  font-size: 0.9rem;
+  color: color-mix(in srgb, var(--bark) 60%, transparent);
+  text-align: center;
+  max-width: 22ch;
+}
+
+.item-panel__kind {
+  margin: 0 0 0.35rem;
+  font-family: var(--metadata);
+  font-size: 0.7rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--canopy);
+}
+
+.item-panel__title {
+  margin: 0 0 1.25rem;
+  font-size: 1.4rem;
+  font-weight: 600;
+  line-height: 1.25;
+}
+
+.item-panel__body {
+  line-height: 1.65;
+}
+
+.item-panel__body > :first-child {
+  margin-top: 0;
+}
+
+.item-panel__body pre {
+  overflow-x: auto;
+  padding: 0.75rem;
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--lichen) 22%, transparent);
+}
+
+.item-panel__body code {
+  font-family: var(--metadata);
+  font-size: 0.9em;
+}

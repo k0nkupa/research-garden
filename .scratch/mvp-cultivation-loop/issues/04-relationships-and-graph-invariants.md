@@ -18,3 +18,13 @@
 - [ ] Contradictory supported Claims are both preserved along with their Roots and an explicit Contradicts relationship
 - [ ] The Tree is projected from frontmatter relationships, not from storage layout, with one implicit trunk holding top-level Branches
 - [ ] Cross-links are visible in the Tree without changing an item's primary location
+
+## Already landed in ticket 02
+
+Verify rather than rebuild:
+
+- `parent_id` validated as a kind-prefixed ULID
+- inverse `childIds` derived at scan time, never written to a second file
+- the implicit trunk and top-level placement
+- a dangling `parent_id` reported as a Garden Diagnostic with the item still placed at
+  the top level rather than dropped

@@ -9,13 +9,15 @@ import { BareTrunk } from './BareTrunk'
 export interface ApplicationShellProps {
   readonly readiness: Readiness
   /**
-   * Ticket 02 supplies these. Until it lands the bare trunk renders its two
-   * Garden Actions inert: folder selection, the filesystem port, and the Garden
-   * Index all belong to that slice, and half-wiring them here would be exactly
-   * the partial execution this shell exists to prevent.
+   * Create Garden stays inert until ticket 06, which owns materializing a
+   * Sample Garden into an empty folder.
    */
   readonly onCreateGarden?: () => void
   readonly onOpenGarden?: () => void
+  /** A folder is being scanned; the actions must not be invoked twice. */
+  readonly busy?: boolean
+  /** A Garden could not be opened, in the person's terms. */
+  readonly failure?: string | undefined
 }
 
 /**
@@ -30,6 +32,8 @@ export function ApplicationShell({
   readiness,
   onCreateGarden,
   onOpenGarden,
+  busy = false,
+  failure,
 }: ApplicationShellProps) {
   if (readiness.kind === 'unsupported-viewport') {
     return <UnsupportedViewport />
@@ -54,14 +58,25 @@ export function ApplicationShell({
         <div className="trunk-scene__figure">
           <BareTrunk />
           <div className="trunk-scene__buttons">
-            <button type="button" className="action action--primary" onClick={onCreateGarden}>
+            <button
+              type="button"
+              className="action action--primary"
+              onClick={onCreateGarden}
+              disabled={busy}
+            >
               Create Garden
             </button>
-            <button type="button" className="action" onClick={onOpenGarden}>
-              Open Garden
+            <button type="button" className="action" onClick={onOpenGarden} disabled={busy}>
+              {busy ? 'Opening…' : 'Open Garden'}
             </button>
           </div>
         </div>
+
+        {failure !== undefined && (
+          <p className="notice notice--failure" role="alert">
+            {failure}
+          </p>
+        )}
 
         {!readiness.agentInterfaceAvailable && <AgentInterfaceUnavailable />}
       </div>

@@ -13,3 +13,14 @@
 - [ ] Relationships referencing items that do not exist are reported as Diagnostics rather than silently dropped
 - [ ] Mutations targeting an invalid item are blocked until its known fields and relationships validate
 - [ ] A Garden whose every file is malformed still opens and explains itself rather than failing opaquely
+
+## Already landed in ticket 02
+
+Verify rather than rebuild -- the mechanism exists, the product behaviour does not:
+
+- `GardenDiagnostic` is produced for unparseable frontmatter, failed schema validation,
+  duplicate item ids, and dangling `parent_id`
+- valid items keep loading when another file is invalid
+
+Still owned here: surfacing Diagnostics in the workspace, keeping invalid items
+enumerable for auditing, and blocking mutations against them.

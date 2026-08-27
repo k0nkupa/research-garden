@@ -38,6 +38,11 @@ const productionSources = readProductionSources()
 const NAMED_PRODUCT_BOUNDARIES: Record<string, string> = {
   react: 'application shell',
   'react-dom': 'application shell',
+  yaml: 'YAML document model that preserves unknown fields and comments (ADR 0054, ADR 0078)',
+  zod: 'runtime schema validation of known canonical fields (ADR 0054)',
+  'markdown-it': 'Markdown rendering with raw HTML disabled (ADR 0056)',
+  dompurify: 'sanitizing rendered Markdown output (ADR 0056)',
+  'd3-hierarchy': 'Tree layout and path calculation only (ADR 0049)',
 }
 
 const NAMED_TOOLING_BOUNDARIES: Record<string, string> = {
@@ -52,6 +57,8 @@ const NAMED_TOOLING_BOUNDARIES: Record<string, string> = {
   '@testing-library/jest-dom': 'shell tests',
   '@types/react': 'type checking',
   '@types/react-dom': 'type checking',
+  '@types/markdown-it': 'type checking',
+  '@types/d3-hierarchy': 'type checking',
 }
 
 /** ADR 0073: no analytics, behavioral tracking, or remote error payloads. */
@@ -118,6 +125,82 @@ describe('no product telemetry (ADR 0073)', () => {
 
   it('declares no inline analytics or tag-manager snippet', () => {
     expect(indexHtml).not.toMatch(/gtag|googletagmanager|dataLayer|analytics\.|_paq|fbq\(/i)
+  })
+})
+
+/**
+ * ADR 0065 separates domain, filesystem, UI, and WebMCP. That separation is
+ * what makes the domain testable without a browser, so it is enforced here
+ * rather than left to habit.
+ */
+describe('layering (ADR 0065)', () => {
+  /**
+   * Operating a folder through the browser. `requestPermission` is deliberately
+   * absent: it is also the port's own method name, so including it would flag
+   * callers of the port rather than callers of the browser.
+   */
+  const BROWSER_FILESYSTEM_API = [
+    'showDirectoryPicker',
+    'FileSystemDirectoryHandle',
+    'FileSystemFileHandle',
+    'FileSystemWritableFileStream',
+    'getDirectoryHandle',
+    'getFileHandle',
+    'createWritable',
+    'queryPermission',
+  ]
+
+  /**
+   * Capability detection legitimately names the picker without operating it:
+   * ADR 0059 requires local-folder access to be feature-detected, and that
+   * check cannot happen inside the adapter it decides whether to build.
+   */
+  const MAY_DETECT_THE_PICKER = 'src/capabilities/'
+
+  const inside = (directory: string) =>
+    productionSources.filter((source) => source.path.startsWith(directory))
+
+  it('confines operating the browser filesystem to the adapter layer', () => {
+    const offenders = productionSources
+      .filter((source) => !source.path.startsWith('src/filesystem/'))
+      .filter((source) => {
+        const names = source.path.startsWith(MAY_DETECT_THE_PICKER)
+          ? BROWSER_FILESYSTEM_API.filter((name) => name !== 'showDirectoryPicker')
+          : BROWSER_FILESYSTEM_API
+        return names.some((name) => source.text.includes(name))
+      })
+      .map((source) => source.path)
+
+    expect(offenders).toEqual([])
+  })
+
+  it('keeps the browser filesystem API out of domain logic', () => {
+    const offenders = inside('src/domain/')
+      .filter((source) => BROWSER_FILESYSTEM_API.some((name) => source.text.includes(name)))
+      .map((source) => source.path)
+
+    expect(offenders).toEqual([])
+  })
+
+  it('keeps React out of domain logic', () => {
+    const offenders = inside('src/domain/')
+      .filter((source) => /from 'react'|from "react"/.test(source.text))
+      .map((source) => source.path)
+
+    expect(offenders).toEqual([])
+  })
+
+  it('keeps the filesystem adapter layer free of React', () => {
+    const offenders = inside('src/filesystem/')
+      .filter((source) => /from 'react'|from "react"/.test(source.text))
+      .map((source) => source.path)
+
+    expect(offenders).toEqual([])
+  })
+
+  it('has domain logic to check, so these rules cannot pass vacuously', () => {
+    expect(inside('src/domain/').length).toBeGreaterThan(0)
+    expect(inside('src/filesystem/').length).toBeGreaterThan(0)
   })
 })
 

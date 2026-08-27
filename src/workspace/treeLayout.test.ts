@@ -1,0 +1,156 @@
+import { describe, expect, it } from 'vitest'
+import { buildGardenIndex } from '../domain/index/gardenIndex'
+import { computeTreeLayout } from './treeLayout'
+
+const ATTENTION = 'branch_01HQ8X2K3M4N5P6Q7R8S9T0V1W'
+const OPTIMISERS = 'branch_01HQ8X2K3M4N5P6Q7R8S9T0V2X'
+const SCALING = 'branch_01HQ8X2K3M4N5P6Q7R8S9T0V3Y'
+
+function branchFile(id: string, title: string, parentId?: string) {
+  return `---
+schema_version: 1
+id: ${id}
+kind: branch
+title: ${title}
+state: active
+created_at: 2026-08-01T10:00:00Z
+updated_at: 2026-08-01T10:00:00Z
+${parentId ? `parent_id: ${parentId}\n` : ''}---
+
+Body.
+`
+}
+
+async function layoutOf(files: { id: string; title: string; parentId?: string }[]) {
+  const index = await buildGardenIndex(
+    files.map((file, position) => ({
+      path: ['branches', `${position}.md`],
+      text: branchFile(file.id, file.title, file.parentId),
+    })),
+  )
+  return computeTreeLayout(index)
+}
+
+describe('computing the Tree layout', () => {
+  it('places a node for each indexed item', async () => {
+    const layout = await layoutOf([
+      { id: ATTENTION, title: 'Attention' },
+      { id: OPTIMISERS, title: 'Optimisers', parentId: ATTENTION },
+    ])
+
+    expect(layout.nodes.map((node) => node.id).sort()).toEqual([ATTENTION, OPTIMISERS].sort())
+  })
+
+  it('carries the title and kind each node needs to label itself', async () => {
+    const layout = await layoutOf([{ id: ATTENTION, title: 'Attention' }])
+
+    expect(layout.nodes[0]).toMatchObject({ title: 'Attention', kind: 'branch' })
+  })
+
+  // ADR 0014: one permanent Tree with an implicit trunk for top-level Branches.
+  it('does not render the implicit trunk as an item', async () => {
+    const layout = await layoutOf([
+      { id: ATTENTION, title: 'Attention' },
+      { id: OPTIMISERS, title: 'Optimisers' },
+    ])
+
+    expect(layout.nodes).toHaveLength(2)
+  })
+
+  it('gives a nested item a greater depth than its parent', async () => {
+    const layout = await layoutOf([
+      { id: ATTENTION, title: 'Attention' },
+      { id: OPTIMISERS, title: 'Optimisers', parentId: ATTENTION },
+    ])
+
+    const depthOf = (id: string) => layout.nodes.find((node) => node.id === id)?.depth
+
+    expect(depthOf(OPTIMISERS)).toBeGreaterThan(depthOf(ATTENTION) as number)
+  })
+
+  it('separates sibling nodes so neither is drawn on top of the other', async () => {
+    const layout = await layoutOf([
+      { id: ATTENTION, title: 'Attention' },
+      { id: OPTIMISERS, title: 'Optimisers' },
+    ])
+
+    const [first, second] = layout.nodes
+    expect(first?.x).not.toBe(second?.x)
+  })
+
+  it('links each child to its parent', async () => {
+    const layout = await layoutOf([
+      { id: ATTENTION, title: 'Attention' },
+      { id: OPTIMISERS, title: 'Optimisers', parentId: ATTENTION },
+    ])
+
+    expect(layout.links).toEqual([
+      expect.objectContaining({ sourceId: ATTENTION, targetId: OPTIMISERS }),
+    ])
+  })
+
+  it('draws no link from the implicit trunk to a top-level item', async () => {
+    const layout = await layoutOf([
+      { id: ATTENTION, title: 'Attention' },
+      { id: OPTIMISERS, title: 'Optimisers' },
+    ])
+
+    expect(layout.links).toEqual([])
+  })
+
+  it('gives each link a path for drawing', async () => {
+    const layout = await layoutOf([
+      { id: ATTENTION, title: 'Attention' },
+      { id: OPTIMISERS, title: 'Optimisers', parentId: ATTENTION },
+    ])
+
+    expect(layout.links[0]?.path).toMatch(/^M/)
+  })
+
+  it('reports a viewBox that contains every node', async () => {
+    const layout = await layoutOf([
+      { id: ATTENTION, title: 'Attention' },
+      { id: OPTIMISERS, title: 'Optimisers', parentId: ATTENTION },
+      { id: SCALING, title: 'Scaling', parentId: ATTENTION },
+    ])
+
+    for (const node of layout.nodes) {
+      expect(node.x).toBeGreaterThanOrEqual(layout.viewBox.minX)
+      expect(node.x).toBeLessThanOrEqual(layout.viewBox.minX + layout.viewBox.width)
+      expect(node.y).toBeGreaterThanOrEqual(layout.viewBox.minY)
+      expect(node.y).toBeLessThanOrEqual(layout.viewBox.minY + layout.viewBox.height)
+    }
+  })
+
+  // The Tree is drawn at natural size, so the box stays tight to the content:
+  // a label must not change size with how much research a person has done.
+  it('keeps the viewBox tight to the content rather than padding it out', async () => {
+    const small = await layoutOf([{ id: ATTENTION, title: 'Attention' }])
+    const larger = await layoutOf([
+      { id: ATTENTION, title: 'Attention' },
+      { id: OPTIMISERS, title: 'Optimisers', parentId: ATTENTION },
+      { id: SCALING, title: 'Scaling', parentId: ATTENTION },
+    ])
+
+    expect(larger.viewBox.width).toBeGreaterThan(small.viewBox.width)
+  })
+
+  it('lays out an empty Garden without failing', async () => {
+    const layout = await layoutOf([])
+
+    expect(layout.nodes).toEqual([])
+    expect(layout.links).toEqual([])
+    expect(layout.viewBox.width).toBeGreaterThan(0)
+  })
+
+  // The layout is derived from the index, so opening the same Garden twice must
+  // put the Tree in the same place.
+  it('is deterministic for the same index', async () => {
+    const files = [
+      { id: ATTENTION, title: 'Attention' },
+      { id: OPTIMISERS, title: 'Optimisers', parentId: ATTENTION },
+    ]
+
+    expect(await layoutOf(files)).toEqual(await layoutOf(files))
+  })
+})
