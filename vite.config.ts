@@ -10,7 +10,10 @@ export default defineConfig({
   },
   test: {
     globals: true,
-    environment: 'jsdom',
+    // Node by default: the domain and filesystem layers never touch the DOM, and
+    // jsdom costs tens of seconds to start. Files that render or sanitize opt in
+    // with an `@vitest-environment jsdom` docblock.
+    environment: 'node',
     setupFiles: ['./vitest.setup.ts'],
     include: ['src/**/*.test.{ts,tsx}'],
   },

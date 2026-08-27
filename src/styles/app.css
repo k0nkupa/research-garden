@@ -277,14 +277,50 @@ body {
   cursor: pointer;
 }
 
-.garden-tree__junction {
+/*
+ * Kind glyphs (ADR 0044). The shape carries the meaning; tone reinforces it.
+ * An outlined glyph reads as open or provisional, a filled one as established.
+ */
+.garden-tree__glyph {
   fill: var(--canvas);
-  stroke: var(--canopy);
   stroke-width: 2.5;
+  stroke-linejoin: round;
 }
 
-.garden-tree__node--selected .garden-tree__junction {
+.garden-tree__glyph--bark {
+  stroke: var(--bark);
+}
+.garden-tree__glyph--canopy {
+  stroke: var(--canopy);
+}
+.garden-tree__glyph--lichen {
+  stroke: color-mix(in srgb, var(--lichen) 80%, var(--bark));
+}
+.garden-tree__glyph--pollen {
+  stroke: color-mix(in srgb, var(--pollen) 88%, var(--bark));
+}
+.garden-tree__glyph--mulberry {
+  stroke: var(--mulberry);
+}
+
+.garden-tree__glyph--filled.garden-tree__glyph--bark {
+  fill: var(--bark);
+}
+.garden-tree__glyph--filled.garden-tree__glyph--canopy {
   fill: var(--canopy);
+}
+.garden-tree__glyph--filled.garden-tree__glyph--lichen {
+  fill: var(--lichen);
+}
+.garden-tree__glyph--filled.garden-tree__glyph--pollen {
+  fill: var(--pollen);
+}
+.garden-tree__glyph--filled.garden-tree__glyph--mulberry {
+  fill: var(--mulberry);
+}
+
+.garden-tree__node--selected .garden-tree__glyph {
+  stroke-width: 4;
 }
 
 .garden-tree__label {

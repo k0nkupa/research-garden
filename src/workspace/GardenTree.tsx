@@ -1,15 +1,17 @@
 import { useMemo } from 'react'
 import type { GardenIndex } from '../domain/index/gardenIndex'
 import { labelForKind } from '../domain/schema/kindLabels'
-import { computeTreeLayout } from './treeLayout'
+import { GLYPH_GEOMETRY, glyphForKind } from './kindGlyphs'
+import { computeTreeLayout, displayLabel } from './treeLayout'
 
 /**
  * The Tree.
  *
  * ADR 0049: a purpose-built accessible SVG. The hierarchy library supplied the
- * geometry; every semantic here is ours. Kind is carried by shape and label
- * together and never by colour alone (ADR 0044), and the accessible name states
- * the kind so the distinction survives for anyone not looking at the drawing.
+ * geometry; every semantic here is ours. Kind is carried by shape, fill, colour,
+ * and text label together and never by colour alone (ADR 0044), and the
+ * accessible name states the kind so the distinction survives for anyone not
+ * looking at the drawing.
  *
  * Pan, zoom, collapse, focus, and keyboard traversal are ticket 08.
  */
@@ -42,6 +44,8 @@ export function GardenTree({ index, selectedId, onSelect }: GardenTreeProps) {
 
       {layout.nodes.map((node) => {
         const selected = node.id === selectedId
+        const glyph = glyphForKind(node.kind)
+
         return (
           <g
             key={node.id}
@@ -60,10 +64,17 @@ export function GardenTree({ index, selectedId, onSelect }: GardenTreeProps) {
               }
             }}
           >
-            {/* A Branch is a labelled junction (ADR 0044). */}
-            <circle className="garden-tree__junction" r={10} />
+            <path
+              className={`garden-tree__glyph garden-tree__glyph--${glyph.tone}${
+                glyph.filled ? ' garden-tree__glyph--filled' : ''
+              }`}
+              // Exposed so a test can assert the shape without reading pixels.
+              data-shape={glyph.shape}
+              d={GLYPH_GEOMETRY[glyph.shape]}
+            />
+            {/* The full title stays in the node's accessible name above. */}
             <text className="garden-tree__label" y={30} textAnchor="middle">
-              {node.title}
+              {displayLabel(node.title)}
             </text>
           </g>
         )

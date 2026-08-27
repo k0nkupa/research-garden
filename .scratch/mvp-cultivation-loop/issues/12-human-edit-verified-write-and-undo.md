@@ -19,3 +19,13 @@
 - [ ] The Garden Activity feed shows action name, time, affected item IDs, and outcome, with no raw bodies
 - [ ] Actions address items by stable ID; no action accepts an absolute or caller-supplied filesystem path
 - [ ] Canonical writes resolve only to typed Garden directories and operational writes only to defined operational locations
+
+## Inherited from ticket 03
+
+This is the first ticket that edits an existing item, so it should verify and tick these
+ticket 03 criteria:
+
+- [ ] `updated_at` moves only when the canonical item is actually edited, and `created_at`
+      never moves (ADR 0077)
+- [ ] A proposed change to a Root that would rewrite its captured evidence is refused;
+      only its metadata is correctable (`rootEvidence.ts`, ADR 0012)

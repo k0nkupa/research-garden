@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { buildGardenIndex } from '../domain/index/gardenIndex'
-import { computeTreeLayout } from './treeLayout'
+import { computeTreeLayout, displayLabel } from './treeLayout'
 
 const ATTENTION = 'branch_01HQ8X2K3M4N5P6Q7R8S9T0V1W'
 const OPTIMISERS = 'branch_01HQ8X2K3M4N5P6Q7R8S9T0V2X'
@@ -152,5 +152,44 @@ describe('computing the Tree layout', () => {
     ]
 
     expect(await layoutOf(files)).toEqual(await layoutOf(files))
+  })
+})
+
+/**
+ * ADR 0043 and ADR 0044: the text label carries meaning and has to stay
+ * scannable. Several siblings with long titles otherwise overlap into
+ * unreadable mush.
+ */
+describe('the label a node displays', () => {
+  it('shows a short title in full', () => {
+    expect(displayLabel('Optimisers')).toBe('Optimisers')
+  })
+
+  it('shortens a title that would overrun its neighbours', () => {
+    const shown = displayLabel('Does sparsity hold outside its own benchmark?')
+
+    expect(shown.length).toBeLessThanOrEqual(23)
+    expect(shown.endsWith('\u2026')).toBe(true)
+  })
+
+  it('breaks at a word boundary when one is close to the limit', () => {
+    expect(displayLabel('Maybe memory bandwidth dominates')).toBe('Maybe memory\u2026')
+  })
+
+  it('still shortens a single unbroken word', () => {
+    const shown = displayLabel('a'.repeat(60))
+
+    expect(shown.length).toBeLessThanOrEqual(23)
+    expect(shown.endsWith('\u2026')).toBe(true)
+  })
+
+  it('leaves a title exactly at the limit untouched', () => {
+    const exact = 'b'.repeat(22)
+
+    expect(displayLabel(exact)).toBe(exact)
+  })
+
+  it('never leaves a trailing space before the ellipsis', () => {
+    expect(displayLabel('Attention mechanisms and other things')).not.toMatch(/ \u2026$/)
   })
 })

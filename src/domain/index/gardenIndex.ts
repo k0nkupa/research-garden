@@ -25,7 +25,6 @@ export interface ScannedFile {
 export interface IndexedItem {
   readonly item: GardenItem
   readonly path: GardenPath
-  readonly body: string
   readonly childIds: readonly string[]
 }
 
@@ -52,7 +51,6 @@ export interface GardenIndex {
 interface Accepted {
   readonly item: GardenItem
   readonly path: GardenPath
-  readonly body: string
 }
 
 export async function buildGardenIndex(files: readonly ScannedFile[]): Promise<GardenIndex> {
@@ -70,7 +68,7 @@ export async function buildGardenIndex(files: readonly ScannedFile[]): Promise<G
       continue
     }
 
-    const validated = validateGardenItem(parsed.document.frontmatter)
+    const validated = validateGardenItem(parsed.document.frontmatter, parsed.document.body)
     if (!validated.ok) {
       diagnostics.push({ path: file.path, problems: validated.problems })
       continue
@@ -90,7 +88,7 @@ export async function buildGardenIndex(files: readonly ScannedFile[]): Promise<G
     }
 
     claimedIds.set(validated.item.id, file.path)
-    accepted.push({ item: validated.item, path: file.path, body: parsed.document.body })
+    accepted.push({ item: validated.item, path: file.path })
   }
 
   // Title order gives the Tree a stable shape between opens without letting
@@ -129,7 +127,6 @@ export async function buildGardenIndex(files: readonly ScannedFile[]): Promise<G
       {
         item: entry.item,
         path: entry.path,
-        body: entry.body,
         childIds: childIdsByParent.get(entry.item.id) ?? [],
       },
     ]),

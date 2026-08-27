@@ -19,6 +19,19 @@
 - [ ] The Tree is projected from frontmatter relationships, not from storage layout, with one implicit trunk holding top-level Branches
 - [ ] Cross-links are visible in the Tree without changing an item's primary location
 
+## Already landed in ticket 03
+
+Verify rather than rebuild:
+
+- a Claim Leaf and a Harvest must each cite at least one Root (`supported_by`, non-empty)
+- `parent_id` must name a Branch, since a Branch is the only kind that can be a parent
+- every Leaf and Harvest must declare a parent; a Root must not; a Branch may be top-level
+
+Still owned here: the six-relation vocabulary itself, directional versus symmetric
+handling, rejection of self-links and duplicates, kind pairings, Parent-cycle rejection,
+and verifying that every referenced id resolves to a real item of the expected kind --
+including the ids in `supported_by`.
+
 ## Already landed in ticket 02
 
 Verify rather than rebuild:

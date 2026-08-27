@@ -4,6 +4,7 @@ import {
   type GardenPath,
 } from '../filesystem/GardenFileSystem'
 import { buildGardenIndex, type GardenIndex, type ScannedFile } from '../domain/index/gardenIndex'
+import { CANONICAL_DIRECTORIES } from '../domain/schema/itemIdentity'
 
 /**
  * The Garden Action layer.
@@ -14,15 +15,6 @@ import { buildGardenIndex, type GardenIndex, type ScannedFile } from '../domain/
  * than throwing, so a surface never has to invent its own error handling and an
  * unsupported or unpermitted state can never half-execute.
  */
-
-/** ADR 0011: canonical Markdown is organized by botanical type. */
-export const CANONICAL_DIRECTORIES: readonly string[] = [
-  'seeds',
-  'roots',
-  'branches',
-  'leaves',
-  'harvests',
-]
 
 export interface OpenedGarden {
   readonly repositoryName: string

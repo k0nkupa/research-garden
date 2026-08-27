@@ -18,7 +18,7 @@ export interface ItemPanelProps {
 
 export function ItemPanel({ selected }: ItemPanelProps) {
   const html = useMemo(
-    () => (selected ? renderGardenMarkdown(selected.body) : ''),
+    () => (selected ? renderGardenMarkdown(selected.item.body) : ''),
     [selected],
   )
 

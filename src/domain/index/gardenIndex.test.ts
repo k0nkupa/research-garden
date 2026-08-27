@@ -35,7 +35,7 @@ describe('building an index', () => {
   it('keeps the body alongside the validated item', async () => {
     const index = await buildGardenIndex(oneBranch)
 
-    expect(index.items.get(ATTENTION)?.body).toContain('Body of Attention.')
+    expect(index.items.get(ATTENTION)?.item.body).toContain('Body of Attention.')
   })
 
   // ADR 0013: relationships reference stable identities, not file paths, but the

@@ -107,6 +107,20 @@ describe('opening a Garden', () => {
     expect(garden.index.diagnostics).toEqual([])
   })
 
+  it('never reads Attachments as canonical knowledge', async () => {
+    const garden = expectOpened(
+      await openGarden(
+        gardenWith({
+          'branches/attention.md': attentionFile,
+          'attachments/paper.md': 'a user-owned supporting file, not a Garden item',
+        }),
+      ),
+    )
+
+    expect(garden.index.items.size).toBe(1)
+    expect(garden.index.diagnostics).toEqual([])
+  })
+
   it('never reads the operational directory as canonical knowledge', async () => {
     const garden = expectOpened(
       await openGarden(

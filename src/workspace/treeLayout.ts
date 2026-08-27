@@ -43,7 +43,36 @@ export interface TreeLayout {
 /** Horizontal room per sibling and vertical room per generation, in SVG units. */
 const SIBLING_SPACING = 180
 const GENERATION_SPACING = 120
-const MARGIN = 80
+
+/**
+ * Room around the Tree for labels, which extend either side of their node.
+ * Sized from the widest a label can be, so an outermost node's text is never
+ * clipped by the viewBox.
+ */
+const MARGIN = 110
+
+/**
+ * A label is truncated to fit the room between siblings.
+ *
+ * ADR 0044 makes the text label one of the carriers of meaning, and ADR 0043
+ * asks for labels that stay immediately scannable -- overlapping titles satisfy
+ * neither. The full title is still the node's accessible name, so nothing is
+ * lost to anyone reading the Tree as text.
+ */
+const MAXIMUM_LABEL_CHARACTERS = 22
+
+export function displayLabel(title: string): string {
+  if (title.length <= MAXIMUM_LABEL_CHARACTERS) return title
+
+  // Trim back to a word boundary anywhere in the latter half, so the ellipsis
+  // does not land mid-word while still keeping most of the title.
+  const clipped = title.slice(0, MAXIMUM_LABEL_CHARACTERS - 1)
+  const lastSpace = clipped.lastIndexOf(' ')
+  const stem =
+    lastSpace >= Math.floor(MAXIMUM_LABEL_CHARACTERS / 2) ? clipped.slice(0, lastSpace) : clipped
+
+  return `${stem.trimEnd()}\u2026`
+}
 
 /** The implicit trunk holding top-level Branches (ADR 0014). Never an item. */
 const TRUNK = Symbol('implicit-trunk')
@@ -51,24 +80,32 @@ const TRUNK = Symbol('implicit-trunk')
 interface LayoutSubject {
   readonly id: string | typeof TRUNK
   readonly title: string
+  /** Absent only for the implicit trunk, which is never drawn as an item. */
   readonly kind: GardenItemKind | undefined
   readonly childIds: readonly string[]
 }
 
 export function computeTreeLayout(index: GardenIndex): TreeLayout {
-  const subjectFor = (id: string): LayoutSubject => {
-    const indexed = index.items.get(id)
-    return {
-      id,
-      title: indexed?.item.title ?? id,
-      kind: indexed?.item.kind,
-      childIds: indexed?.childIds ?? [],
-    }
-  }
+  // Only ids the index actually holds become subjects. An id that resolved to
+  // nothing would otherwise have to be drawn as some kind, and drawing it as
+  // the wrong one is worse than not drawing it (ADR 0052).
+  const subjectsFor = (ids: readonly string[]): LayoutSubject[] =>
+    ids.flatMap((id) => {
+      const indexed = index.items.get(id)
+      if (!indexed) return []
+      return [
+        {
+          id,
+          title: indexed.item.title,
+          kind: indexed.item.kind,
+          childIds: indexed.childIds,
+        },
+      ]
+    })
 
   const root = hierarchy<LayoutSubject>(
     { id: TRUNK, title: 'Garden', kind: undefined, childIds: index.topLevelIds },
-    (subject) => subject.childIds.map(subjectFor),
+    (subject) => subjectsFor(subject.childIds),
   )
 
   const positioned = tree<LayoutSubject>()
@@ -80,7 +117,8 @@ export function computeTreeLayout(index: GardenIndex): TreeLayout {
   const nodes: TreeNode[] = placed.map((node) => ({
     id: node.data.id as string,
     title: node.data.title,
-    kind: node.data.kind ?? 'branch',
+    // Every drawn node came from the index, so its kind is known.
+    kind: node.data.kind as GardenItemKind,
     // The synthetic trunk occupies depth 0, so a top-level item reads as depth 1.
     depth: node.depth,
     x: node.x,

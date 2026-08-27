@@ -15,3 +15,12 @@
 - [ ] The Tree grows from the materialized files immediately after creation
 - [ ] Research Garden remembers the Garden Repository's directory handle and display name in browser-local storage, and stores no canonical content there
 - [ ] A returning person can resume a remembered Garden, and is asked for file permission again whenever the browser requires it
+
+## Inherited from ticket 03
+
+This is the first ticket that writes a file, so it should verify and tick these ticket 03
+criteria, which are implemented and unit-tested but have no caller yet:
+
+- [ ] Materialized filenames are readable title slugs (`titleSlug`)
+- [ ] A short identity suffix is appended only to resolve a collision (`fileNameFor`)
+- [ ] Newly created files use the documented canonical field order (`CANONICAL_FIELD_ORDER`)
