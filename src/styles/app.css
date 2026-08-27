@@ -444,3 +444,113 @@ body {
   font-family: var(--metadata);
   font-size: 0.9em;
 }
+
+/*
+ * Garden Diagnostics (ADR 0052). Marked, never hidden: a person cannot fix what
+ * they cannot see, and a file silently ignored looks like a file lost.
+ */
+
+.workspace__diagnostics-toggle {
+  font-family: var(--metadata);
+  font-size: 0.75rem;
+  padding: 0.2rem 0.6rem;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--mulberry) 45%, transparent);
+  background: color-mix(in srgb, var(--mulberry) 10%, transparent);
+  color: var(--mulberry);
+  cursor: pointer;
+}
+
+.workspace__diagnostics-toggle[aria-pressed='true'] {
+  background: var(--mulberry);
+  color: var(--canvas);
+}
+
+.workspace__diagnostics-toggle:focus-visible {
+  outline: 2px solid var(--pollen);
+  outline-offset: 2px;
+}
+
+.garden-tree__diagnostic-mark {
+  fill: var(--mulberry);
+  stroke: var(--canvas);
+  stroke-width: 1.5;
+}
+
+.diagnostics {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.diagnostics__preamble {
+  margin: 0.75rem 0 1rem;
+  font-family: var(--control);
+  font-size: 0.85rem;
+  line-height: 1.5;
+  color: color-mix(in srgb, var(--bark) 70%, transparent);
+}
+
+.diagnostics__entry {
+  padding: 0.9rem 0;
+  border-top: 1px solid color-mix(in srgb, var(--lichen) 50%, transparent);
+}
+
+.diagnostics__subject {
+  margin: 0 0 0.15rem;
+  font-size: 1rem;
+  font-weight: 600;
+}
+
+.diagnostics__link {
+  font: inherit;
+  color: var(--canopy);
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  text-align: left;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.diagnostics__path {
+  margin: 0 0 0.5rem;
+  font-family: var(--metadata);
+  font-size: 0.75rem;
+  color: color-mix(in srgb, var(--bark) 55%, transparent);
+}
+
+.diagnostics__problems {
+  margin: 0;
+  padding-left: 1.1rem;
+  font-family: var(--control);
+  font-size: 0.85rem;
+  line-height: 1.5;
+}
+
+.diagnostics__field {
+  font-family: var(--metadata);
+  font-size: 0.8em;
+  color: var(--mulberry);
+}
+
+.item-panel__diagnostics {
+  margin: 0 0 1.25rem;
+  padding: 0.85rem 1rem;
+  border-left: 3px solid var(--mulberry);
+  background: color-mix(in srgb, var(--mulberry) 8%, transparent);
+  font-family: var(--control);
+  font-size: 0.85rem;
+  line-height: 1.5;
+}
+
+.item-panel__diagnostics-heading {
+  margin: 0 0 0.5rem;
+  font-weight: 600;
+}
+
+.item-panel__diagnostics ul {
+  margin: 0;
+  padding-left: 1.1rem;
+}

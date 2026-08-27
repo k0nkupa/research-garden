@@ -105,7 +105,18 @@ export function buildGardenGraph(subjects: ReadonlyMap<string, GraphSubject>): G
   const seenKeys = new Set<string>()
 
   const report = (id: string, problem: ValidationProblem) => {
-    diagnostics.push({ path: subjects.get(id)?.path ?? [], problems: [problem] })
+    // The graph only ever reports on items it was given, so the subject is
+    // always present. Defaulting a missing path would key the Diagnostic on the
+    // empty string and silently merge unrelated files.
+    const subject = subjects.get(id)
+    if (subject === undefined) return
+
+    diagnostics.push({
+      path: subject.path,
+      itemId: id,
+      title: subject.item.title,
+      problems: [problem],
+    })
   }
 
   for (const { item } of subjects.values()) {

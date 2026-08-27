@@ -35,3 +35,8 @@ ticket 03 criteria:
       never moves (ADR 0077)
 - [ ] A proposed change to a Root that would rewrite its captured evidence is refused;
       only its metadata is correctable (`rootEvidence.ts`, ADR 0012)
+
+## Inherited from ticket 05
+
+- [ ] `ensureMutable` refuses to edit an item carrying a Garden Diagnostic, and the
+      interface explains why rather than silently doing nothing (ADR 0052)

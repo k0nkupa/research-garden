@@ -393,3 +393,265 @@ describe('Cross-link styling hooks', () => {
     expect(container.querySelector('.garden-tree__cross-link--relates_to')).toBeNull()
   })
 })
+
+/**
+ * ADR 0052: neither hide invalid files nor let one malformed file stop
+ * unrelated research from opening.
+ */
+describe('Garden Diagnostics in the workspace', () => {
+  const BRANCH_ID = 'branch_01HQ8X2K3M4N5P6Q7R8S9T0B1W'
+  const ROOT_ID = 'root_01HQ8X2K3M4N5P6Q7R8S9T0R1W'
+  const CLAIM_ID = 'claim_leaf_01HQ8X2K3M4N5P6Q7R8S9T0C1W'
+  const NOWHERE = 'claim_leaf_01HQ8X2K3M4N5P6Q7R8S9T0ZZW'
+
+  const front = (lines: string[]) =>
+    ['---', 'schema_version: 1', ...lines, 'created_at: 2026-08-01T10:00:00Z',
+      'updated_at: 2026-08-01T10:00:00Z', '---', '', 'A body.', ''].join('\n')
+
+  const healthy = {
+    path: ['branches', 'topic.md'],
+    text: front([`id: ${BRANCH_ID}`, 'kind: branch', 'title: A healthy topic', 'state: active']),
+  }
+  const evidence = {
+    path: ['roots', 'e.md'],
+    text: front([`id: ${ROOT_ID}`, 'kind: root', 'title: Evidence',
+      'captured_at: 2026-08-01T09:00:00Z', 'content_hash: sha256:x']),
+  }
+  /** Loads fine, but points at an item that is not here. */
+  const flaggedClaim = {
+    path: ['leaves', 'c.md'],
+    text: front([`id: ${CLAIM_ID}`, 'kind: claim_leaf', 'title: Points nowhere',
+      `parent_id: ${BRANCH_ID}`, 'supported_by:', `  - ${ROOT_ID}`,
+      'relations:', '  - type: contradicts', `    target: ${NOWHERE}`]),
+  }
+  /** Never parses at all, so it has no identity to report. */
+  const rubbish = { path: ['branches', 'rubbish.md'], text: 'not a Garden item\n' }
+
+  async function renderWith(files: { path: string[]; text: string }[]) {
+    const index = await buildGardenIndex(files)
+    return { ...render(<Workspace garden={{ repositoryName: 'g', index }} />), index }
+  }
+
+  it('shows how many files need attention', async () => {
+    await renderWith([healthy, evidence, flaggedClaim, rubbish])
+
+    expect(screen.getByRole('button', { name: /2 Diagnostics/ })).toBeInTheDocument()
+  })
+
+  it('uses the singular when only one file needs attention', async () => {
+    await renderWith([healthy, rubbish])
+
+    expect(screen.getByRole('button', { name: /1 Diagnostic$/ })).toBeInTheDocument()
+  })
+
+  it('offers nothing to open when every file validated', async () => {
+    await renderWith([healthy, evidence])
+
+    expect(screen.queryByRole('button', { name: /Diagnostic/ })).not.toBeInTheDocument()
+  })
+
+  it('opens the list of Diagnostics', async () => {
+    await renderWith([healthy, evidence, flaggedClaim, rubbish])
+
+    await userEvent.click(screen.getByRole('button', { name: /Diagnostics/ }))
+
+    expect(screen.getByRole('complementary', { name: /Garden Diagnostics/ })).toBeInTheDocument()
+  })
+
+  it('explains what needs attention on each file', async () => {
+    await renderWith([healthy, evidence, flaggedClaim, rubbish])
+    await userEvent.click(screen.getByRole('button', { name: /Diagnostics/ }))
+
+    const panel = screen.getByRole('complementary', { name: /Garden Diagnostics/ })
+    expect(panel).toHaveTextContent('Points nowhere')
+    expect(panel).toHaveTextContent(/not an item in this Garden/)
+  })
+
+  it('names the path of a file that never parsed, having no item to name', async () => {
+    await renderWith([healthy, rubbish])
+    await userEvent.click(screen.getByRole('button', { name: /Diagnostic/ }))
+
+    expect(screen.getByRole('complementary', { name: /Garden Diagnostics/ })).toHaveTextContent(
+      'branches/rubbish.md',
+    )
+  })
+
+  it('reassures that everything else opened normally', async () => {
+    await renderWith([healthy, evidence, flaggedClaim])
+    await userEvent.click(screen.getByRole('button', { name: /Diagnostic/ }))
+
+    expect(screen.getByRole('complementary', { name: /Garden Diagnostics/ })).toHaveTextContent(
+      /Everything else opened normally/i,
+    )
+  })
+
+  it('jumps to an item that did load', async () => {
+    await renderWith([healthy, evidence, flaggedClaim])
+    await userEvent.click(screen.getByRole('button', { name: /Diagnostic/ }))
+    await userEvent.click(screen.getByRole('button', { name: 'Points nowhere' }))
+
+    expect(screen.getByRole('heading', { level: 2, name: 'Points nowhere' })).toBeInTheDocument()
+  })
+
+  it('offers no jump for a file that never loaded', async () => {
+    await renderWith([healthy, rubbish])
+    await userEvent.click(screen.getByRole('button', { name: /Diagnostic/ }))
+
+    expect(
+      screen.queryByRole('button', { name: 'branches/rubbish.md' }),
+    ).not.toBeInTheDocument()
+  })
+
+  it('keeps every valid item in the Tree', async () => {
+    await renderWith([healthy, evidence, flaggedClaim, rubbish])
+
+    expect(screen.getByRole('treeitem', { name: /A healthy topic/ })).toBeInTheDocument()
+    expect(screen.getByRole('treeitem', { name: /Evidence/ })).toBeInTheDocument()
+  })
+
+  // Marked, not hidden.
+  it('keeps a flagged item in the Tree and marks it as needing attention', async () => {
+    await renderWith([healthy, evidence, flaggedClaim])
+
+    const node = screen.getByRole('treeitem', { name: /Points nowhere/ })
+    expect(node).toBeInTheDocument()
+    expect(node).toHaveAttribute('aria-invalid', 'true')
+  })
+
+  it('does not mark an item that is fine', async () => {
+    await renderWith([healthy, evidence, flaggedClaim])
+
+    expect(screen.getByRole('treeitem', { name: /A healthy topic/ })).not.toHaveAttribute(
+      'aria-invalid',
+    )
+  })
+
+  it('says on the item itself that it cannot be changed yet', async () => {
+    await renderWith([healthy, evidence, flaggedClaim])
+    await userEvent.click(screen.getByRole('treeitem', { name: /Points nowhere/ }))
+
+    expect(screen.getByRole('complementary', { name: /Selected item/ })).toHaveTextContent(
+      /cannot be changed until it validates/i,
+    )
+  })
+
+  it('says nothing of the sort on an item that is fine', async () => {
+    await renderWith([healthy, evidence, flaggedClaim])
+    await userEvent.click(screen.getByRole('treeitem', { name: /A healthy topic/ }))
+
+    expect(screen.getByRole('complementary', { name: /Selected item/ })).not.toHaveTextContent(
+      /cannot be changed/i,
+    )
+  })
+
+  it('still shows the flagged item’s content, because it is readable', async () => {
+    await renderWith([healthy, evidence, flaggedClaim])
+    await userEvent.click(screen.getByRole('treeitem', { name: /Points nowhere/ }))
+
+    expect(screen.getByRole('complementary', { name: /Selected item/ })).toHaveTextContent(
+      'A body.',
+    )
+  })
+
+  it('returns to the item panel after jumping from the list', async () => {
+    await renderWith([healthy, evidence, flaggedClaim])
+    await userEvent.click(screen.getByRole('button', { name: /Diagnostic/ }))
+    await userEvent.click(screen.getByRole('button', { name: 'Points nowhere' }))
+
+    expect(
+      screen.queryByRole('complementary', { name: /Garden Diagnostics/ }),
+    ).not.toBeInTheDocument()
+  })
+})
+
+// "A Garden whose every file is malformed still opens and explains itself."
+describe('a workspace where nothing is valid', () => {
+  it('opens, shows an empty Tree, and explains every file', async () => {
+    const index = await buildGardenIndex([
+      { path: ['branches', 'a.md'], text: 'no frontmatter\n' },
+      { path: ['roots', 'b.md'], text: '---\nkind: [unclosed\n---\n\nbody\n' },
+    ])
+    render(<Workspace garden={{ repositoryName: 'g', index }} />)
+
+    expect(screen.getByRole('tree')).toBeInTheDocument()
+    expect(screen.queryAllByRole('treeitem')).toEqual([])
+
+    await userEvent.click(screen.getByRole('button', { name: /2 Diagnostics/ }))
+    const panel = screen.getByRole('complementary', { name: /Garden Diagnostics/ })
+    expect(panel).toHaveTextContent('branches/a.md')
+    expect(panel).toHaveTextContent('roots/b.md')
+  })
+})
+
+describe('a Diagnostic for a file with nothing to name', () => {
+  it('heads the entry with its path once, not twice', async () => {
+    const index = await buildGardenIndex([
+      { path: ['seeds', 'lost-note.md'], text: 'pasted in without frontmatter\n' },
+    ])
+    render(<Workspace garden={{ repositoryName: 'g', index }} />)
+    await userEvent.click(screen.getByRole('button', { name: /Diagnostic/ }))
+
+    const panel = screen.getByRole('complementary', { name: /Garden Diagnostics/ })
+    const occurrences = (panel.textContent ?? '').split('seeds/lost-note.md').length - 1
+    expect(occurrences).toBe(1)
+  })
+
+  it('still shows the path for a file that does name an item', async () => {
+    const index = await buildGardenIndex([
+      {
+        path: ['branches', 'broken.md'],
+        text: ['---', 'schema_version: 1', 'id: branch_01HQ8X2K3M4N5P6Q7R8S9T0B1W',
+          'kind: branch', 'title: Missing its state', 'created_at: 2026-08-01T10:00:00Z',
+          'updated_at: 2026-08-01T10:00:00Z', '---', '', 'b', ''].join('\n'),
+      },
+    ])
+    render(<Workspace garden={{ repositoryName: 'g', index }} />)
+    await userEvent.click(screen.getByRole('button', { name: /Diagnostic/ }))
+
+    const panel = screen.getByRole('complementary', { name: /Garden Diagnostics/ })
+    expect(panel).toHaveTextContent('Missing its state')
+    expect(panel).toHaveTextContent('branches/broken.md')
+  })
+})
+
+describe('two files claiming one id, in the workspace', () => {
+  const ID = 'branch_01HQ8X2K3M4N5P6Q7R8S9T0B1W'
+  const claimant = (title: string) =>
+    ['---', 'schema_version: 1', `id: ${ID}`, 'kind: branch', `title: ${title}`, 'state: active',
+      'created_at: 2026-08-01T10:00:00Z', 'updated_at: 2026-08-01T10:00:00Z', '---', '', 'b', ''].join('\n')
+
+  async function renderDuplicated() {
+    const index = await buildGardenIndex([
+      { path: ['branches', 'real.md'], text: claimant('The real one') },
+      { path: ['branches', 'copy.md'], text: claimant('The impostor') },
+    ])
+    return render(<Workspace garden={{ repositoryName: 'g', index }} />)
+  }
+
+  it('does not mark the surviving item as needing attention', async () => {
+    await renderDuplicated()
+
+    expect(screen.getByRole('treeitem', { name: /The real one/ })).not.toHaveAttribute(
+      'aria-invalid',
+    )
+  })
+
+  it('does not tell the surviving item it cannot be changed', async () => {
+    await renderDuplicated()
+    await userEvent.click(screen.getByRole('treeitem', { name: /The real one/ }))
+
+    expect(screen.getByRole('complementary', { name: /Selected item/ })).not.toHaveTextContent(
+      /cannot be changed/i,
+    )
+  })
+
+  it('lists the losing file without offering a jump to the surviving item', async () => {
+    await renderDuplicated()
+    await userEvent.click(screen.getByRole('button', { name: /Diagnostic/ }))
+
+    const panel = screen.getByRole('complementary', { name: /Garden Diagnostics/ })
+    expect(panel).toHaveTextContent('The impostor')
+    expect(panel).toHaveTextContent('branches/copy.md')
+    expect(screen.queryByRole('button', { name: 'The impostor' })).not.toBeInTheDocument()
+  })
+})

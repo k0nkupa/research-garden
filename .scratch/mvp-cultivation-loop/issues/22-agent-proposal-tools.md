@@ -18,3 +18,8 @@
 - [ ] Every proposal touches at most one canonical file in its preview
 - [ ] Proposals appear immediately in the Change Tray for human review
 - [ ] Every proposal appears in the Garden Activity feed and returns the common envelope
+
+## Inherited from ticket 05
+
+- [ ] `ensureMutable` refuses a proposal whose target carries a Garden Diagnostic
+      (ADR 0052)

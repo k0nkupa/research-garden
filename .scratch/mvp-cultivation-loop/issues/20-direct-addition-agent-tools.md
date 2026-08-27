@@ -17,3 +17,8 @@
 - [ ] Each action validates against the full schema and graph invariants before writing, and runs the verified write sequence
 - [ ] Each action returns the common envelope with the updated Garden Revision
 - [ ] Each action appears in the Garden Activity feed and the new item appears in the Tree
+
+## Inherited from ticket 05
+
+- [ ] `ensureMutable` refuses an addition whose target carries a Garden Diagnostic,
+      returning a stable error rather than a bare refusal (ADR 0036, ADR 0052)

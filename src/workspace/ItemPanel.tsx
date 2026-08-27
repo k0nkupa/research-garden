@@ -1,7 +1,8 @@
 import { useMemo } from 'react'
-import type { IndexedItem } from '../domain/index/gardenIndex'
+import type { GardenDiagnostic, IndexedItem } from '../domain/index/gardenIndex'
 import { renderGardenMarkdown } from '../domain/markdown/renderGardenMarkdown'
 import { labelForKind } from '../domain/schema/kindLabels'
+import { ProblemList } from './ProblemList'
 
 /**
  * The selected-item panel.
@@ -14,9 +15,11 @@ import { labelForKind } from '../domain/schema/kindLabels'
  */
 export interface ItemPanelProps {
   readonly selected: IndexedItem | undefined
+  /** ADR 0052: an item with Diagnostics is readable but not writable. */
+  readonly diagnostics: readonly GardenDiagnostic[]
 }
 
-export function ItemPanel({ selected }: ItemPanelProps) {
+export function ItemPanel({ selected, diagnostics }: ItemPanelProps) {
   const html = useMemo(
     () => (selected ? renderGardenMarkdown(selected.item.body) : ''),
     [selected],
@@ -36,6 +39,15 @@ export function ItemPanel({ selected }: ItemPanelProps) {
         <p className="item-panel__kind">{labelForKind(selected.item.kind)}</p>
         <h2 className="item-panel__title">{selected.item.title}</h2>
       </header>
+
+      {diagnostics.length > 0 && (
+        <div className="item-panel__diagnostics" role="status">
+          <p className="item-panel__diagnostics-heading">
+            This item needs attention and cannot be changed until it validates.
+          </p>
+          <ProblemList problems={diagnostics.flatMap((diagnostic) => diagnostic.problems)} />
+        </div>
+      )}
 
       <div className="item-panel__body" dangerouslySetInnerHTML={{ __html: html }} />
     </aside>

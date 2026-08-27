@@ -35,11 +35,20 @@ export interface IndexedItem {
  * A Garden Diagnostic: a noncanonical validation finding about a Garden file.
  *
  * ADR 0052 keeps the affected item visible and lets unrelated valid items load.
- * Ticket 05 surfaces these in the interface, exposes them to auditing, and
- * blocks mutations against the items they name.
+ * One Diagnostic per file, carrying every problem found in it, because that is
+ * how a person reads their Garden -- "this file needs attention, and here is
+ * everything wrong with it" rather than the same file listed four times.
+ *
+ * Identity is recorded whenever the file parsed far enough to declare it, even
+ * if validation then failed, so a Diagnostic can say *which item* rather than
+ * only which path.
  */
 export interface GardenDiagnostic {
   readonly path: GardenPath
+  /** Present when the file declared an id, even if the rest did not validate. */
+  readonly itemId: string | undefined
+  /** Present when the file declared a title, so a person can recognize it. */
+  readonly title: string | undefined
   readonly problems: readonly ValidationProblem[]
 }
 
@@ -58,24 +67,56 @@ interface Accepted {
   readonly path: GardenPath
 }
 
+/** Collects every problem found in a file, so one file yields one Diagnostic. */
+class DiagnosticCollector {
+  #byPath = new Map<string, GardenDiagnostic>()
+
+  add(path: GardenPath, problems: readonly ValidationProblem[], identity?: FileIdentity): void {
+    const key = path.join('/')
+    const existing = this.#byPath.get(key)
+
+    this.#byPath.set(key, {
+      path,
+      itemId: identity?.itemId ?? existing?.itemId,
+      title: identity?.title ?? existing?.title,
+      problems: [...(existing?.problems ?? []), ...problems],
+    })
+  }
+
+  all(): readonly GardenDiagnostic[] {
+    return [...this.#byPath.values()]
+  }
+}
+
+interface FileIdentity {
+  readonly itemId: string | undefined
+  readonly title: string | undefined
+}
+
+/** Reads whatever identity a file declared, without trusting it to be valid. */
+function declaredIdentity(frontmatter: Record<string, unknown>): FileIdentity {
+  const asText = (value: unknown) => (typeof value === 'string' && value !== '' ? value : undefined)
+  return { itemId: asText(frontmatter['id']), title: asText(frontmatter['title']) }
+}
+
 export async function buildGardenIndex(files: readonly ScannedFile[]): Promise<GardenIndex> {
   const accepted: Accepted[] = []
-  const diagnostics: GardenDiagnostic[] = []
+  const collector = new DiagnosticCollector()
   const claimedIds = new Map<string, GardenPath>()
 
   for (const file of files) {
     const parsed = parseGardenDocument(file.text)
     if (!parsed.ok) {
-      diagnostics.push({
-        path: file.path,
-        problems: [{ field: 'frontmatter', message: parsed.error.message }],
-      })
+      // Nothing parsed, so there is no identity to report -- only the path.
+      collector.add(file.path, [{ field: 'frontmatter', message: parsed.error.message }])
       continue
     }
 
+    const identity = declaredIdentity(parsed.document.frontmatter)
+
     const validated = validateGardenItem(parsed.document.frontmatter, parsed.document.body)
     if (!validated.ok) {
-      diagnostics.push({ path: file.path, problems: validated.problems })
+      collector.add(file.path, validated.problems, identity)
       continue
     }
 
@@ -83,12 +124,13 @@ export async function buildGardenIndex(files: readonly ScannedFile[]): Promise<G
     // relationships address items by id, so the ambiguity has to be visible.
     const alreadyClaimed = claimedIds.get(validated.item.id)
     if (alreadyClaimed) {
-      diagnostics.push({
-        path: file.path,
-        problems: [
-          { field: 'id', message: `duplicates the id already used by ${alreadyClaimed.join('/')}` },
-        ],
-      })
+      collector.add(
+        file.path,
+        [{ field: 'id', message: `duplicates the id already used by ${alreadyClaimed.join('/')}` }],
+        // Deliberately not the id: it belongs to the file that claimed it first,
+        // and attributing this Diagnostic to it would blame the innocent file.
+        { itemId: undefined, title: identity.title },
+      )
       continue
     }
 
@@ -108,7 +150,12 @@ export async function buildGardenIndex(files: readonly ScannedFile[]): Promise<G
     ),
   )
 
-  diagnostics.push(...graph.diagnostics)
+  for (const diagnostic of graph.diagnostics) {
+    collector.add(diagnostic.path, diagnostic.problems, {
+      itemId: diagnostic.itemId,
+      title: diagnostic.title,
+    })
+  }
 
   const childIdsByParent = new Map<string, string[]>()
   const topLevelIds: string[] = []
@@ -144,7 +191,7 @@ export async function buildGardenIndex(files: readonly ScannedFile[]): Promise<G
     items,
     topLevelIds,
     graph,
-    diagnostics,
+    diagnostics: collector.all(),
     // Every scanned file counts, including invalid ones: fixing a broken file
     // must move the revision so held results are known to be out of date.
     revision: await deriveGardenRevision(files),

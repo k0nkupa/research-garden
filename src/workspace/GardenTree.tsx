@@ -20,6 +20,8 @@ import type { RelationType } from '../domain/schema/relations'
 export interface GardenTreeProps {
   readonly index: GardenIndex
   readonly selectedId: string | undefined
+  /** Items that loaded but carry a Garden Diagnostic (ADR 0052). */
+  readonly diagnosedIds?: ReadonlySet<string>
   readonly onSelect: (id: string) => void
 }
 
@@ -54,7 +56,14 @@ function describeCrossLinksByItem(
   )
 }
 
-export function GardenTree({ index, selectedId, onSelect }: GardenTreeProps) {
+const NOTHING_DIAGNOSED: ReadonlySet<string> = new Set()
+
+export function GardenTree({
+  index,
+  selectedId,
+  diagnosedIds = NOTHING_DIAGNOSED,
+  onSelect,
+}: GardenTreeProps) {
   const layout = useMemo(() => computeTreeLayout(index), [index])
   const crossLinksByItem = useMemo(
     () => describeCrossLinksByItem(layout.crossLinks),
@@ -105,14 +114,20 @@ export function GardenTree({ index, selectedId, onSelect }: GardenTreeProps) {
         const selected = node.id === selectedId
         const glyph = glyphForKind(node.kind)
         const crossLinks = crossLinksByItem.get(node.id)
+        const diagnosed = diagnosedIds.has(node.id)
 
         return (
           <g
             key={node.id}
-            className={`garden-tree__node${selected ? ' garden-tree__node--selected' : ''}`}
+            className={`garden-tree__node${selected ? ' garden-tree__node--selected' : ''}${
+              diagnosed ? ' garden-tree__node--diagnosed' : ''
+            }`}
             role="treeitem"
             aria-level={node.depth}
             aria-selected={selected}
+            // Marked rather than hidden: a Diagnostic is something to fix, not a
+            // reason to make an item disappear (ADR 0052).
+            aria-invalid={diagnosed || undefined}
             aria-label={`${labelForKind(node.kind)}: ${node.title}`}
             aria-describedby={crossLinks ? `${node.id}-cross-links` : undefined}
             tabIndex={0}
@@ -142,6 +157,10 @@ export function GardenTree({ index, selectedId, onSelect }: GardenTreeProps) {
             )}
 
             {/* The full title stays in the node's accessible name above. */}
+            {diagnosed && (
+              <circle className="garden-tree__diagnostic-mark" r={4} cx={13} cy={-13} />
+            )}
+
             <text className="garden-tree__label" y={30} textAnchor="middle">
               {displayLabel(node.title)}
             </text>
