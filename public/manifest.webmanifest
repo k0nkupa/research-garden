@@ -1,0 +1,13 @@
+{
+  "name": "Research Garden",
+  "short_name": "Research Garden",
+  "description": "A safe, local-first research interface where ChatGPT cultivates private Markdown through constrained, reviewable WebMCP tools.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#EDF3EE",
+  "theme_color": "#EDF3EE",
+  "icons": [
+    { "src": "/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }
+  ]
+}

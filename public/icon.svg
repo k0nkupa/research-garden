@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Research Garden">
+  <rect width="64" height="64" rx="12" fill="#21332B" />
+  <g fill="none" stroke="#EDF3EE" stroke-width="3" stroke-linecap="round">
+    <path d="M32 50 L32 26" />
+    <path d="M32 34 C 24 28, 20 24, 17 17" />
+    <path d="M32 30 C 40 24, 44 20, 47 13" />
+  </g>
+  <circle cx="32" cy="22" r="4" fill="#D6A63A" />
+</svg>

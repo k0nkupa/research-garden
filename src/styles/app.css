@@ -1,0 +1,202 @@
+/*
+ * Botanical Instrument foundations (ADR 0039).
+ *
+ * These are the tokens the shell needs today. The complete visual system —
+ * self-hosted Literata, Instrument Sans, and IBM Plex Mono, and the refined
+ * botanical form — lands with ticket 10. Fonts are declared as stacks rather
+ * than fetched from a CDN because a font request to a third party would be a
+ * passive disclosure of use (ADR 0073).
+ */
+:root {
+  --canvas: #edf3ee;
+  --bark: #21332b;
+  --canopy: #3c6b53;
+  --lichen: #9cb29b;
+  --pollen: #d6a63a;
+  --mulberry: #7a4e64;
+
+  --reading: Literata, 'Iowan Old Style', Georgia, serif;
+  --control: 'Instrument Sans', 'Helvetica Neue', Arial, sans-serif;
+  --metadata: 'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--canvas);
+  color: var(--bark);
+  font-family: var(--reading);
+  -webkit-font-smoothing: antialiased;
+}
+
+.shell {
+  display: flex;
+  min-height: 100%;
+  align-items: center;
+  justify-content: center;
+  padding: clamp(1.25rem, 5vw, 2.5rem);
+}
+
+/* Bare trunk entry (ADR 0046) */
+
+.trunk-scene {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+}
+
+.trunk-scene__header {
+  max-width: 44ch;
+}
+
+/*
+ * The trunk figure carries the two Garden Actions at its soil line (ADR 0046).
+ * The soil line sits at y=196 of the 260-unit viewBox, so the action row is
+ * anchored at that same fraction of the figure's height and the figure reserves
+ * the room beneath it for the roots.
+ */
+.trunk-scene__figure {
+  position: relative;
+  width: min(34rem, 76vw);
+  margin-top: -1.5rem;
+}
+
+.trunk-scene__buttons {
+  position: absolute;
+  top: calc(196 / 260 * 100%);
+  left: 50%;
+  transform: translate(-50%, -50%);
+  display: flex;
+  gap: 0.75rem;
+  white-space: nowrap;
+}
+
+.bare-trunk {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.bare-trunk__trunk,
+.bare-trunk__roots {
+  fill: none;
+  stroke: var(--bark);
+  stroke-linecap: round;
+}
+
+.bare-trunk__trunk {
+  stroke-width: 3.5;
+}
+
+.bare-trunk__roots {
+  stroke-width: 2;
+  stroke-opacity: 0.45;
+}
+
+.bare-trunk__soil {
+  stroke: var(--lichen);
+  stroke-width: 1.5;
+  stroke-dasharray: 2 6;
+  stroke-linecap: round;
+}
+
+.trunk-scene__title {
+  margin: 0 0 0.75rem;
+  font-size: 2.5rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.trunk-scene__promise {
+  margin: 0 0 1rem;
+  font-size: 1.05rem;
+  line-height: 1.55;
+  color: color-mix(in srgb, var(--bark) 82%, transparent);
+}
+
+
+.action {
+  font-family: var(--control);
+  background: var(--canvas);
+  font-size: 0.95rem;
+  font-weight: 500;
+  padding: 0.7rem 1.4rem;
+  border-radius: 999px;
+  border: 1.5px solid var(--canopy);
+  color: var(--canopy);
+  cursor: pointer;
+  transition: background-color 120ms ease, color 120ms ease;
+}
+
+.action:hover {
+  background: color-mix(in srgb, var(--canopy) 12%, var(--canvas));
+}
+
+.action--primary {
+  background: var(--canopy);
+  color: var(--canvas);
+}
+
+.action--primary:hover {
+  background: color-mix(in srgb, var(--canopy) 88%, var(--bark));
+}
+
+.action:focus-visible {
+  outline: 2px solid var(--pollen);
+  outline-offset: 3px;
+}
+
+.notice {
+  font-family: var(--control);
+  font-size: 0.875rem;
+  line-height: 1.5;
+  margin: 1.5rem 0 0;
+  max-width: 42ch;
+  text-align: left;
+  padding: 0.85rem 1rem;
+  border-left: 3px solid var(--pollen);
+  background: color-mix(in srgb, var(--pollen) 10%, transparent);
+}
+
+/* Capability and viewport explanations (ADR 0040, ADR 0059) */
+
+.explanation {
+  max-width: min(46ch, 100%);
+  text-align: left;
+}
+
+.explanation h1 {
+  margin: 0 0 1rem;
+  font-size: clamp(1.45rem, 6vw, 1.85rem);
+  text-wrap: balance;
+  font-weight: 600;
+  line-height: 1.25;
+}
+
+.explanation p {
+  margin: 0 0 1rem;
+  line-height: 1.6;
+  color: color-mix(in srgb, var(--bark) 82%, transparent);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
