@@ -552,3 +552,43 @@ describe('the canonical field order', () => {
     expect(new Set(CANONICAL_FIELD_ORDER).size).toBe(CANONICAL_FIELD_ORDER.length)
   })
 })
+
+// ADR 0017: the controlled vocabulary, enforced where a Diagnostic can name
+// the file that broke it.
+describe('the relationship vocabulary in frontmatter', () => {
+  const withRelations = (relations: unknown) => ({ ...WELL_FORMED['seed'], relations })
+
+  it.each(['derived_from', 'answers', 'contradicts', 'relates_to'])(
+    'accepts %s in the relations list',
+    (type) => {
+      const item = valid(withRelations([{ type, target: `branch_${ULID_2}` }]))
+
+      expect(item.relations[0]?.type).toBe(type)
+    },
+  )
+
+  it('rejects an invented relationship name', () => {
+    expect(fieldsIn(withRelations([{ type: 'inspires', target: `branch_${ULID_2}` }])).join()).toContain(
+      'relations',
+    )
+  })
+
+  it('rejects a plausible synonym for one it does know', () => {
+    expect(
+      fieldsIn(withRelations([{ type: 'proves', target: `branch_${ULID_2}` }])).join(),
+    ).toContain('relations')
+  })
+
+  // ADR 0020: two spellings of one fact is what the vocabulary prevents.
+  it('refuses Parent in the relations list, pointing at parent_id', () => {
+    const problems = invalid(withRelations([{ type: 'parent', target: `branch_${ULID_2}` }]))
+
+    expect(problems.map((problem) => problem.message).join()).toContain('parent_id')
+  })
+
+  it('refuses Supports in the relations list, pointing at supported_by', () => {
+    const problems = invalid(withRelations([{ type: 'supports', target: ROOT }]))
+
+    expect(problems.map((problem) => problem.message).join()).toContain('supported_by')
+  })
+})

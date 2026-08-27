@@ -193,3 +193,86 @@ describe('the label a node displays', () => {
     expect(displayLabel('Attention mechanisms and other things')).not.toMatch(/ \u2026$/)
   })
 })
+
+/**
+ * CONTEXT.md: a Cross-link is an explicit relationship outside an item's
+ * primary placement. Drawing them is what keeps the Tree a legible one-parent
+ * projection while the graph underneath stays truthful (ADR 0008).
+ */
+describe('Cross-links in the layout', () => {
+  const ROOT_ID = 'root_01HQ8X2K3M4N5P6Q7R8S9T0R1W'
+  const CLAIM_ID = 'claim_leaf_01HQ8X2K3M4N5P6Q7R8S9T0C1W'
+  const CLAIM_2_ID = 'claim_leaf_01HQ8X2K3M4N5P6Q7R8S9T0C2W'
+  const BRANCH_ID = 'branch_01HQ8X2K3M4N5P6Q7R8S9T0B1W'
+
+  const frontmatter = (lines: string[]) =>
+    ['---', 'schema_version: 1', ...lines, 'created_at: 2026-08-01T10:00:00Z',
+      'updated_at: 2026-08-01T10:00:00Z', '---', '', 'A body.', ''].join('\n')
+
+  async function contradictingClaims() {
+    return computeTreeLayout(
+      await buildGardenIndex([
+        { path: ['branches', 'b.md'], text: frontmatter([`id: ${BRANCH_ID}`, 'kind: branch', 'title: Topic', 'state: active']) },
+        { path: ['roots', 'r.md'], text: frontmatter([`id: ${ROOT_ID}`, 'kind: root', 'title: Evidence', 'captured_at: 2026-08-01T09:00:00Z', 'content_hash: sha256:x']) },
+        { path: ['leaves', 'c1.md'], text: frontmatter([`id: ${CLAIM_ID}`, 'kind: claim_leaf', 'title: One', `parent_id: ${BRANCH_ID}`, 'supported_by:', `  - ${ROOT_ID}`, 'relations:', '  - type: contradicts', `    target: ${CLAIM_2_ID}`]) },
+        { path: ['leaves', 'c2.md'], text: frontmatter([`id: ${CLAIM_2_ID}`, 'kind: claim_leaf', 'title: Two', `parent_id: ${BRANCH_ID}`, 'supported_by:', `  - ${ROOT_ID}`]) },
+      ]),
+    )
+  }
+
+  it('draws the Contradicts relationship between the two Claims', async () => {
+    const layout = await contradictingClaims()
+
+    expect(
+      layout.crossLinks.some(
+        (link) =>
+          link.type === 'contradicts' &&
+          [link.sourceId, link.targetId].sort().join() === [CLAIM_ID, CLAIM_2_ID].sort().join(),
+      ),
+    ).toBe(true)
+  })
+
+  it('draws the evidence relationship from the Root to each Claim', async () => {
+    const layout = await contradictingClaims()
+
+    const supports = layout.crossLinks.filter((link) => link.type === 'supports')
+    expect(supports).toHaveLength(2)
+    expect(supports.every((link) => link.sourceId === ROOT_ID)).toBe(true)
+  })
+
+  it('draws no Cross-link for a Parent placement, which is structure', async () => {
+    const layout = await contradictingClaims()
+
+    expect(layout.crossLinks.some((link) => link.type === 'parent')).toBe(false)
+  })
+
+  it('leaves the primary placement untouched by a Cross-link', async () => {
+    const layout = await contradictingClaims()
+
+    const claim = layout.nodes.find((node) => node.id === CLAIM_ID)
+    expect(claim?.depth).toBe(2)
+  })
+
+  it('gives every Cross-link a path for drawing', async () => {
+    const layout = await contradictingClaims()
+
+    for (const link of layout.crossLinks) expect(link.path).toMatch(/^M/)
+  })
+
+  it('bows the Cross-link away from a straight chord, so siblings stay legible', async () => {
+    const layout = await contradictingClaims()
+    const contradicts = layout.crossLinks.find((link) => link.type === 'contradicts')
+
+    expect(contradicts?.path).toContain('Q')
+  })
+
+  it('draws no Cross-link when the Garden has none', async () => {
+    const layout = computeTreeLayout(
+      await buildGardenIndex([
+        { path: ['branches', 'b.md'], text: frontmatter([`id: ${BRANCH_ID}`, 'kind: branch', 'title: Topic', 'state: active']) },
+      ]),
+    )
+
+    expect(layout.crossLinks).toEqual([])
+  })
+})

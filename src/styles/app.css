@@ -256,14 +256,19 @@ body {
   min-width: 0;
   padding: 1.5rem;
   display: flex;
-  align-items: center;
-  justify-content: center;
   /* The Tree is drawn at natural size; ticket 08 replaces this with pan and zoom. */
   overflow: auto;
 }
 
+/*
+ * `margin: auto` rather than `justify-content: center`. Both centre a Tree
+ * smaller than its pane, but centring via the container pushes an overflowing
+ * Tree into negative scroll space, leaving its left side permanently
+ * unreachable. Auto margins centre without ever doing that.
+ */
 .garden-tree {
   flex: none;
+  margin: auto;
 }
 
 .garden-tree__links path {
@@ -275,6 +280,44 @@ body {
 
 .garden-tree__node {
   cursor: pointer;
+}
+
+/*
+ * Cross-links: relationships outside an item's placement in the Tree. Dashed so
+ * they never read as structure, and mulberry for Contradicts (ADR 0045).
+ */
+.garden-tree__cross-link {
+  fill: none;
+  stroke: var(--lichen);
+  stroke-width: 1.5;
+  stroke-dasharray: 5 5;
+  stroke-opacity: 0.85;
+}
+
+.garden-tree__cross-link--contradicts {
+  stroke: var(--mulberry);
+  stroke-width: 2;
+  stroke-dasharray: 6 4;
+}
+
+.garden-tree__cross-link--supports {
+  stroke: color-mix(in srgb, var(--canopy) 70%, var(--canvas));
+  stroke-dasharray: 3 4;
+}
+
+.garden-tree__cross-link--answers {
+  stroke: color-mix(in srgb, var(--pollen) 80%, var(--bark));
+  stroke-dasharray: 8 4;
+}
+
+.garden-tree__cross-link--derived-from {
+  stroke: color-mix(in srgb, var(--lichen) 90%, var(--bark));
+  stroke-dasharray: 2 5;
+}
+
+.garden-tree__cross-link--relates-to {
+  stroke: var(--lichen);
+  stroke-dasharray: 5 5;
 }
 
 /*

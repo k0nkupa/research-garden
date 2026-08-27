@@ -5,6 +5,7 @@ import {
   type GardenItem,
   type ValidationProblem,
 } from '../schema/gardenItem'
+import { buildGardenGraph, type GardenGraph, type GraphSubject } from './gardenGraph'
 import { deriveGardenRevision, type GardenRevision } from './gardenRevision'
 
 /**
@@ -26,6 +27,8 @@ export interface IndexedItem {
   readonly item: GardenItem
   readonly path: GardenPath
   readonly childIds: readonly string[]
+  /** ADR 0015: derived from what points back at a Seed, never stored on it. */
+  readonly cultivated: boolean
 }
 
 /**
@@ -44,6 +47,8 @@ export interface GardenIndex {
   readonly items: ReadonlyMap<string, IndexedItem>
   /** Items with no parent placement, in Tree order. */
   readonly topLevelIds: readonly string[]
+  /** The resolved relationship graph, with inverses derived rather than stored. */
+  readonly graph: GardenGraph
   readonly diagnostics: readonly GardenDiagnostic[]
   readonly revision: GardenRevision
 }
@@ -94,24 +99,26 @@ export async function buildGardenIndex(files: readonly ScannedFile[]): Promise<G
   // Title order gives the Tree a stable shape between opens without letting
   // filesystem enumeration order leak into what a person sees.
   const byTitle = [...accepted].sort((a, b) => a.item.title.localeCompare(b.item.title))
+
+  // Whole-Garden invariants: reference resolution, kind pairings, and Parent
+  // acyclicity all need every item in hand (ADR 0079).
+  const graph = buildGardenGraph(
+    new Map<string, GraphSubject>(
+      byTitle.map((entry) => [entry.item.id, { item: entry.item, path: entry.path }]),
+    ),
+  )
+
+  diagnostics.push(...graph.diagnostics)
+
   const childIdsByParent = new Map<string, string[]>()
   const topLevelIds: string[] = []
 
   for (const entry of byTitle) {
     const parentId = entry.item.parentId
 
-    if (parentId === undefined) {
-      topLevelIds.push(entry.item.id)
-      continue
-    }
-
-    if (!claimedIds.has(parentId)) {
-      // The Tree must still be able to show the item, so it is placed at the top
-      // level and the broken relationship is reported rather than dropped.
-      diagnostics.push({
-        path: entry.path,
-        problems: [{ field: 'parent_id', message: 'names an item that is not in this Garden' }],
-      })
+    // An item whose placement was refused still appears, at the top level, so a
+    // broken relationship never makes knowledge disappear (ADR 0052).
+    if (parentId === undefined || graph.unplacedIds.has(entry.item.id)) {
       topLevelIds.push(entry.item.id)
       continue
     }
@@ -128,6 +135,7 @@ export async function buildGardenIndex(files: readonly ScannedFile[]): Promise<G
         item: entry.item,
         path: entry.path,
         childIds: childIdsByParent.get(entry.item.id) ?? [],
+        cultivated: graph.cultivatedSeedIds.has(entry.item.id),
       },
     ]),
   )
@@ -135,6 +143,7 @@ export async function buildGardenIndex(files: readonly ScannedFile[]): Promise<G
   return {
     items,
     topLevelIds,
+    graph,
     diagnostics,
     // Every scanned file counts, including invalid ones: fixing a broken file
     // must move the revision so held results are known to be out of date.

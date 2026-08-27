@@ -1,5 +1,11 @@
 import { z } from 'zod'
 import { GARDEN_ITEM_KINDS, isValidItemId, parseItemId, type GardenItemKind } from './itemIdentity'
+import {
+  RELATIONS_IN_FRONTMATTER,
+  RELATION_FIELD,
+  isRelationType,
+  type RelationType,
+} from './relations'
 
 /**
  * Schema validation for canonical Garden items.
@@ -25,9 +31,8 @@ export type { GardenItemKind }
 
 export type BranchState = 'active' | 'dormant'
 
-/** ADR 0017 owns the vocabulary; this layer only checks the shape. */
 export interface ItemRelation {
-  readonly type: string
+  readonly type: RelationType
   readonly target: string
 }
 
@@ -120,8 +125,35 @@ const anyItemId = z
   .string()
   .refine((value) => parseItemId(value) !== undefined, 'must be a kind-prefixed ULID')
 
+/**
+ * ADR 0017: an invented relationship name is refused rather than absorbed, and
+ * a relation that belongs in a dedicated field may not also be spelled here --
+ * two spellings of one fact is the fragmentation the vocabulary prevents.
+ */
+const relationTypeInFrontmatter = z.string().superRefine((value, context) => {
+  if (!isRelationType(value)) {
+    context.addIssue({
+      code: 'custom',
+      message: `must be one of: ${RELATIONS_IN_FRONTMATTER.join(', ')}`,
+    })
+    return
+  }
+
+  if (!RELATIONS_IN_FRONTMATTER.includes(value)) {
+    context.addIssue({
+      code: 'custom',
+      message: `belongs in ${RELATION_FIELD[value]}, not in relations`,
+    })
+  }
+})
+
+function asRelationType(value: string): RelationType {
+  // superRefine above has already refused anything outside the vocabulary.
+  return value as RelationType
+}
+
 const relation = z.looseObject({
-  type: z.string().min(1, 'must name a relationship'),
+  type: relationTypeInFrontmatter,
   target: anyItemId,
 })
 
@@ -358,7 +390,10 @@ export function validateGardenItem(
     id: data.id,
     title: data.title,
     parentId: 'parent_id' in data ? (data.parent_id as string | undefined) : undefined,
-    relations: data.relations.map((entry) => ({ type: entry.type, target: entry.target })),
+    relations: data.relations.map((entry) => ({
+      type: asRelationType(entry.type),
+      target: entry.target,
+    })),
     createdAt: data.created_at,
     updatedAt: data.updated_at,
     body,

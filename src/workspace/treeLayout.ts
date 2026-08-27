@@ -1,6 +1,7 @@
 import { hierarchy, tree, type HierarchyPointNode } from 'd3-hierarchy'
 import type { GardenIndex } from '../domain/index/gardenIndex'
 import type { GardenItemKind } from '../domain/schema/gardenItem'
+import type { RelationType } from '../domain/schema/relations'
 
 /**
  * Geometry for the Tree.
@@ -27,6 +28,21 @@ export interface TreeLink {
   readonly path: string
 }
 
+/**
+ * A relationship drawn outside an item's primary placement.
+ *
+ * CONTEXT.md defines a Cross-link as an explicit relationship between items
+ * outside their placement in the Tree, which is every relationship that is not
+ * Parent. Drawing them is what lets the Tree stay a legible one-parent
+ * projection while the graph underneath stays truthful (ADR 0008).
+ */
+export interface TreeCrossLink {
+  readonly type: RelationType
+  readonly sourceId: string
+  readonly targetId: string
+  readonly path: string
+}
+
 export interface TreeViewBox {
   readonly minX: number
   readonly minY: number
@@ -37,6 +53,7 @@ export interface TreeViewBox {
 export interface TreeLayout {
   readonly nodes: readonly TreeNode[]
   readonly links: readonly TreeLink[]
+  readonly crossLinks: readonly TreeCrossLink[]
   readonly viewBox: TreeViewBox
 }
 
@@ -136,7 +153,43 @@ export function computeTreeLayout(index: GardenIndex): TreeLayout {
       path: verticalPath(link.source, link.target),
     }))
 
-  return { nodes, links, viewBox: viewBoxAround(nodes) }
+  const placedById = new Map(nodes.map((node) => [node.id, node]))
+
+  const crossLinks: TreeCrossLink[] = index.graph.relationships
+    .filter((relationship) => relationship.type !== 'parent')
+    .flatMap((relationship) => {
+      const source = placedById.get(relationship.sourceId)
+      const target = placedById.get(relationship.targetId)
+      if (!source || !target) return []
+
+      return [
+        {
+          type: relationship.type,
+          sourceId: relationship.sourceId,
+          targetId: relationship.targetId,
+          path: bowedPath(source, target),
+        },
+      ]
+    })
+
+  return { nodes, links, crossLinks, viewBox: viewBoxAround(nodes) }
+}
+
+/**
+ * A curve bowed away from the straight line between two nodes.
+ *
+ * Cross-links frequently join nodes that sit far apart or on the same row, and
+ * a straight chord between siblings would disappear into their own limbs. The
+ * bow scales with distance so short links stay gentle and long ones stay
+ * distinguishable from the Tree's own structure.
+ */
+function bowedPath(source: TreeNode, target: TreeNode): string {
+  const midX = (source.x + target.x) / 2
+  const midY = (source.y + target.y) / 2
+  const span = Math.hypot(target.x - source.x, target.y - source.y)
+  const bow = Math.min(span / 4, 90)
+
+  return `M${source.x},${source.y} Q${midX},${midY + bow} ${target.x},${target.y}`
 }
 
 /** A smooth vertical join, so limbs read as growth rather than as a flowchart. */

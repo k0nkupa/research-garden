@@ -292,3 +292,104 @@ describe('a Garden holding every kind', () => {
     expect(screen.getByRole('complementary')).toHaveTextContent('Harvest')
   })
 })
+
+/**
+ * ADR 0008: the Tree gives each item one primary location while Cross-links
+ * keep the graph underneath truthful. ADR 0018: neither side of a contradiction
+ * is discarded.
+ */
+describe('Cross-links in the Tree', () => {
+  const ROOT_ID = 'root_01HQ8X2K3M4N5P6Q7R8S9T0R1W'
+  const CLAIM_ID = 'claim_leaf_01HQ8X2K3M4N5P6Q7R8S9T0C1W'
+  const CLAIM_2_ID = 'claim_leaf_01HQ8X2K3M4N5P6Q7R8S9T0C2W'
+  const BRANCH_ID = 'branch_01HQ8X2K3M4N5P6Q7R8S9T0B1W'
+
+  const front = (lines: string[]) =>
+    ['---', 'schema_version: 1', ...lines, 'created_at: 2026-08-01T10:00:00Z',
+      'updated_at: 2026-08-01T10:00:00Z', '---', '', 'A body.', ''].join('\n')
+
+  async function renderContradiction() {
+    const index = await buildGardenIndex([
+      { path: ['branches', 'b.md'], text: front([`id: ${BRANCH_ID}`, 'kind: branch', 'title: Topic', 'state: active']) },
+      { path: ['roots', 'r.md'], text: front([`id: ${ROOT_ID}`, 'kind: root', 'title: Evidence', 'captured_at: 2026-08-01T09:00:00Z', 'content_hash: sha256:x']) },
+      { path: ['leaves', 'c1.md'], text: front([`id: ${CLAIM_ID}`, 'kind: claim_leaf', 'title: Costs fall', `parent_id: ${BRANCH_ID}`, 'supported_by:', `  - ${ROOT_ID}`, 'relations:', '  - type: contradicts', `    target: ${CLAIM_2_ID}`]) },
+      { path: ['leaves', 'c2.md'], text: front([`id: ${CLAIM_2_ID}`, 'kind: claim_leaf', 'title: Costs rise', `parent_id: ${BRANCH_ID}`, 'supported_by:', `  - ${ROOT_ID}`]) },
+    ])
+    expect(index.diagnostics, JSON.stringify(index.diagnostics)).toEqual([])
+    return render(<Workspace garden={{ repositoryName: 'g', index }} />)
+  }
+
+  it('draws the Contradicts Cross-link', async () => {
+    const { container } = await renderContradiction()
+
+    expect(container.querySelector('[data-relation="contradicts"]')).toBeInTheDocument()
+  })
+
+  it('draws the evidence Cross-links from the Root', async () => {
+    const { container } = await renderContradiction()
+
+    expect(container.querySelectorAll('[data-relation="supports"]')).toHaveLength(2)
+  })
+
+  it('keeps both contradicting Claims in the Tree', async () => {
+    await renderContradiction()
+
+    expect(screen.getByRole('treeitem', { name: /Costs fall/ })).toBeInTheDocument()
+    expect(screen.getByRole('treeitem', { name: /Costs rise/ })).toBeInTheDocument()
+  })
+
+  it('leaves both Claims under their Branch, unmoved by the Cross-link', async () => {
+    await renderContradiction()
+
+    expect(screen.getByRole('treeitem', { name: /Costs fall/ })).toHaveAttribute('aria-level', '2')
+    expect(screen.getByRole('treeitem', { name: /Costs rise/ })).toHaveAttribute('aria-level', '2')
+  })
+
+  // Cross-links are curves, so without a description they would be visible only
+  // to someone looking at the picture.
+  it('describes a node’s Cross-links to assistive technology', async () => {
+    await renderContradiction()
+
+    expect(screen.getByRole('treeitem', { name: /Costs fall/ })).toHaveAccessibleDescription(
+      /Contradicts 1/,
+    )
+  })
+
+  it('describes the Root’s evidence Cross-links', async () => {
+    await renderContradiction()
+
+    expect(screen.getByRole('treeitem', { name: /Evidence/ })).toHaveAccessibleDescription(
+      /Supports 2/,
+    )
+  })
+
+  it('gives a node with no Cross-links no description', async () => {
+    await renderContradiction()
+
+    expect(screen.getByRole('treeitem', { name: /^Branch:/ })).not.toHaveAccessibleDescription()
+  })
+})
+
+describe('Cross-link styling hooks', () => {
+  const ROOT_ID = 'root_01HQ8X2K3M4N5P6Q7R8S9T0R1W'
+  const CLAIM_ID = 'claim_leaf_01HQ8X2K3M4N5P6Q7R8S9T0C1W'
+  const CLAIM_2_ID = 'claim_leaf_01HQ8X2K3M4N5P6Q7R8S9T0C2W'
+  const BRANCH_ID = 'branch_01HQ8X2K3M4N5P6Q7R8S9T0B1W'
+
+  const front = (lines: string[]) =>
+    ['---', 'schema_version: 1', ...lines, 'created_at: 2026-08-01T10:00:00Z',
+      'updated_at: 2026-08-01T10:00:00Z', '---', '', 'A body.', ''].join('\n')
+
+  it('names the Cross-link class in kebab case, not identifier case', async () => {
+    const index = await buildGardenIndex([
+      { path: ['branches', 'b.md'], text: front([`id: ${BRANCH_ID}`, 'kind: branch', 'title: T', 'state: active']) },
+      { path: ['roots', 'r.md'], text: front([`id: ${ROOT_ID}`, 'kind: root', 'title: E', 'captured_at: 2026-08-01T09:00:00Z', 'content_hash: sha256:x']) },
+      { path: ['leaves', 'c1.md'], text: front([`id: ${CLAIM_ID}`, 'kind: claim_leaf', 'title: One', `parent_id: ${BRANCH_ID}`, 'supported_by:', `  - ${ROOT_ID}`, 'relations:', '  - type: relates_to', `    target: ${CLAIM_2_ID}`]) },
+      { path: ['leaves', 'c2.md'], text: front([`id: ${CLAIM_2_ID}`, 'kind: claim_leaf', 'title: Two', `parent_id: ${BRANCH_ID}`, 'supported_by:', `  - ${ROOT_ID}`]) },
+    ])
+    const { container } = render(<Workspace garden={{ repositoryName: 'g', index }} />)
+
+    expect(container.querySelector('.garden-tree__cross-link--relates-to')).toBeInTheDocument()
+    expect(container.querySelector('.garden-tree__cross-link--relates_to')).toBeNull()
+  })
+})

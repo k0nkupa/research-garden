@@ -20,6 +20,12 @@
 - [ ] Actions address items by stable ID; no action accepts an absolute or caller-supplied filesystem path
 - [ ] Canonical writes resolve only to typed Garden directories and operational writes only to defined operational locations
 
+## Inherited from ticket 04
+
+- [ ] Adding or editing knowledge never rewrites a Root, because Supports is serialized on
+      the Claim or Harvest (ADR 0020). Structurally true today, but unfalsifiable until a
+      write path exists.
+
 ## Inherited from ticket 03
 
 This is the first ticket that edits an existing item, so it should verify and tick these
