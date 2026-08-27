@@ -10,7 +10,15 @@ import type { GardenFileSystem } from './GardenFileSystem'
  * handle so nothing above it needs to know which API supplied the folder.
  */
 export type ChooseRepositoryResult =
-  | { readonly kind: 'chosen'; readonly fileSystem: GardenFileSystem }
+  | {
+      readonly kind: 'chosen'
+      readonly fileSystem: GardenFileSystem
+      /**
+       * The handle behind the port, returned here rather than exposed on the
+       * port itself so that only ADR 0060's remembering ever sees it.
+       */
+      readonly handle: DirectoryHandleLike
+    }
   /** The person dismissed the picker. Not an error, and nothing has happened. */
   | { readonly kind: 'cancelled' }
   | { readonly kind: 'unavailable' }
@@ -34,7 +42,7 @@ export async function chooseGardenRepository(
 
   try {
     const handle = await openPicker.call(source, { mode: 'readwrite', id: 'research-garden' })
-    return { kind: 'chosen', fileSystem: new FileSystemAccessGardenFileSystem(handle) }
+    return { kind: 'chosen', fileSystem: new FileSystemAccessGardenFileSystem(handle), handle }
   } catch (error) {
     // A dismissed picker arrives as AbortError. Treat it as the non-event it is
     // rather than reporting a failure the person did not cause.
@@ -43,4 +51,9 @@ export async function chooseGardenRepository(
     }
     return { kind: 'unavailable' }
   }
+}
+
+/** Rebuilds the port from a handle this browser remembered (ADR 0060). */
+export function repositoryFromHandle(handle: DirectoryHandleLike): GardenFileSystem {
+  return new FileSystemAccessGardenFileSystem(handle)
 }

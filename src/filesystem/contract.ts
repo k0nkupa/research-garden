@@ -235,3 +235,32 @@ export function describeGardenFileSystemContract(name: string, setUp: ContractSe
     })
   })
 }
+
+/**
+ * Extra behaviour only an adapter backed by a real folder can have: the folder
+ * itself going away. The in-memory adapter has no such folder, so this is run
+ * against the File System Access adapter alone.
+ */
+export function describeVanishingRepository(
+  name: string,
+  setUp: (files: Record<string, string>) => { fileSystem: GardenFileSystem; vanish(): void },
+) {
+  describe(`${name} notices its folder vanishing`, () => {
+    const garden = { 'branches/attention.md': '# Attention\n' }
+
+    it('reports a listing as not-found rather than as empty', async () => {
+      const { fileSystem, vanish } = setUp(garden)
+      vanish()
+
+      await expect(fileSystem.listFiles(['branches'])).rejects.toMatchObject({
+        code: 'not-found',
+      })
+    })
+
+    it('reports a directory the Garden simply lacks as empty, not as missing', async () => {
+      const { fileSystem } = setUp(garden)
+
+      await expect(fileSystem.listFiles(['harvests'])).resolves.toEqual([])
+    })
+  })
+}

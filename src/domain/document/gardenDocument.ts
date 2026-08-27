@@ -1,4 +1,4 @@
-import { Document, parseDocument, isMap } from 'yaml'
+import { Document, parseDocument, isMap, stringify } from 'yaml'
 
 /**
  * The document model for canonical Garden Markdown.
@@ -102,4 +102,35 @@ export function setFrontmatterField(
     yaml,
     originalText: undefined,
   }
+}
+
+/**
+ * Writes a brand-new canonical file.
+ *
+ * ADR 0078 gives new files a documented field order while leaving existing
+ * files alone, so a Garden Research Garden created reads the same way every
+ * time without it ever reformatting a file a person wrote. Fields the order
+ * does not name are kept, in the order they were given, rather than dropped --
+ * the same tolerance ADR 0054 asks for on read.
+ */
+export function serializeNewGardenDocument(
+  frontmatter: Record<string, unknown>,
+  body: string,
+  fieldOrder: readonly string[],
+): string {
+  const present = Object.entries(frontmatter).filter(([, value]) => value !== undefined)
+  const rank = new Map(fieldOrder.map((field, at) => [field, at]))
+
+  const ordered: Record<string, unknown> = {}
+  for (const [field] of [...present].sort(
+    ([a], [b]) => (rank.get(a) ?? Number.MAX_SAFE_INTEGER) - (rank.get(b) ?? Number.MAX_SAFE_INTEGER),
+  )) {
+    ordered[field] = frontmatter[field]
+  }
+
+  // A body that already ends in a newline must not gain a second one, and one
+  // that does not must gain its first: a canonical file ends with exactly one.
+  const separated = body === '' ? '' : `\n${body.replace(/\n*$/, '\n')}`
+
+  return `---\n${stringify(ordered)}---\n${separated}`
 }

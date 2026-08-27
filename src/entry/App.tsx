@@ -6,6 +6,7 @@ import {
 } from '../capabilities/capabilities'
 import { useGardenSession } from '../garden/useGardenSession'
 import { Workspace } from '../workspace/Workspace'
+import { AlreadyAGarden } from './AlreadyAGarden'
 import { ApplicationShell } from './ApplicationShell'
 import { PermissionLapsed } from './PermissionLapsed'
 
@@ -26,7 +27,17 @@ function readReadiness(): Readiness {
  */
 export function App() {
   const [readiness, setReadiness] = useState<Readiness>(readReadiness)
-  const { session, openFromPicker, retryPermission, dismiss } = useGardenSession()
+  const {
+    session,
+    createFromPicker,
+    openFromPicker,
+    openChosen,
+    retryPermission,
+    dismiss,
+    remembered,
+    resumeRemembered,
+    forgetRemembered,
+  } = useGardenSession()
 
   useEffect(() => {
     const resolve = () => setReadiness(readReadiness())
@@ -46,6 +57,17 @@ export function App() {
     return <Workspace garden={session.garden} />
   }
 
+  if (session.kind === 'already-a-garden') {
+    return (
+      <AlreadyAGarden
+        repositoryName={session.repositoryName}
+        found={session.found}
+        onOpenInstead={openChosen}
+        onDismiss={dismiss}
+      />
+    )
+  }
+
   if (session.kind === 'permission-required') {
     return (
       <PermissionLapsed
@@ -59,9 +81,13 @@ export function App() {
   return (
     <ApplicationShell
       readiness={readiness}
+      onCreateGarden={createFromPicker}
       onOpenGarden={openFromPicker}
-      busy={session.kind === 'opening'}
+      busy={session.kind === 'working'}
       failure={session.kind === 'failed' ? session.message : undefined}
+      remembered={remembered}
+      onResume={resumeRemembered}
+      onForget={forgetRemembered}
     />
   )
 }

@@ -64,6 +64,15 @@ export async function openGarden(fileSystem: GardenFileSystem): Promise<OpenGard
       return { kind: 'permission-required', repositoryName }
     }
 
+    // A folder that has been moved or deleted since it was remembered is worth
+    // saying plainly, rather than reporting whatever the browser called it.
+    if (error instanceof GardenFileSystemError && error.code === 'not-found') {
+      return {
+        kind: 'failed',
+        message: `${repositoryName} could not be found. It may have been moved, renamed, or deleted.`,
+      }
+    }
+
     return {
       kind: 'failed',
       message: error instanceof Error ? error.message : 'The folder could not be read.',

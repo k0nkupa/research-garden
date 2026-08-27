@@ -19,4 +19,6 @@
 - [ ] The resulting Harvest preserves both contradictory Claims and their Roots and explains the uncertainty
 - [ ] The resulting Markdown is fully readable and editable outside Research Garden
 - [ ] At least one manual acceptance run uses a real selected folder in a current supported desktop Chromium environment
+- [ ] That run confirms `IndexedDbRememberedGardenStore` remembers a real directory handle
+      and resumes from it, which no automated harness can exercise (ticket 06)
 - [ ] At least one manual acceptance run exercises the complete WebMCP workflow in ChatGPT's supported desktop environment

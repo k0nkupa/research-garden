@@ -554,3 +554,45 @@ body {
   margin: 0;
   padding-left: 1.1rem;
 }
+
+/* Resuming a remembered Garden (ADR 0060) */
+
+.trunk-scene__remembered {
+  display: flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: 0.75rem;
+  margin: 1.5rem 0 0;
+}
+
+.action--quiet {
+  padding: 0.45rem 1rem;
+  font-size: 0.85rem;
+  border-color: color-mix(in srgb, var(--canopy) 45%, transparent);
+}
+
+.trunk-scene__forget {
+  font-family: var(--control);
+  font-size: 0.8rem;
+  background: none;
+  border: none;
+  padding: 0;
+  color: color-mix(in srgb, var(--bark) 55%, transparent);
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.trunk-scene__forget:focus-visible {
+  outline: 2px solid var(--pollen);
+  outline-offset: 2px;
+}
+
+.explanation__found {
+  margin: 0 0 1rem;
+  padding-left: 1.1rem;
+  font-family: var(--metadata);
+  font-size: 0.8rem;
+  line-height: 1.6;
+  color: color-mix(in srgb, var(--bark) 65%, transparent);
+}

@@ -1,4 +1,4 @@
-import { describeGardenFileSystemContract } from './contract'
+import { describeGardenFileSystemContract, describeVanishingRepository } from './contract'
 import { FileSystemAccessGardenFileSystem } from './FileSystemAccessGardenFileSystem'
 import { FakeDirectoryHandle } from './fakeDirectoryHandle'
 
@@ -12,4 +12,9 @@ describeGardenFileSystemContract('FileSystemAccessGardenFileSystem', (files) => 
     revokePermission: () => root.setPermission('denied'),
     grantPermission: () => root.setPermission('granted'),
   }
+})
+
+describeVanishingRepository('FileSystemAccessGardenFileSystem', (files) => {
+  const root = FakeDirectoryHandle.fromFiles(files, 'test-garden')
+  return { fileSystem: new FileSystemAccessGardenFileSystem(root), vanish: () => root.vanish() }
 })

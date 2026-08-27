@@ -110,10 +110,44 @@ describe('no product telemetry (ADR 0073)', () => {
     }
   })
 
-  it('references no remote origin from application source', () => {
+  /**
+   * The Sample Garden cites two real papers. A citation is inert data: it
+   * becomes a Root's `origin_url`, which ADR 0057 renders as a link and never
+   * fetches. The exemption lists the exact URLs rather than the file, so a
+   * third one cannot arrive unnoticed and the rule stays absolute otherwise.
+   */
+  const PERMITTED_CITATIONS = [
+    'https://psycnet.apa.org/record/1993-40718-001',
+    'https://journals.sagepub.com/doi/10.1177/0956797614535810',
+  ]
+
+  const remoteOriginsIn = (text: string) =>
+    [...text.matchAll(/https?:\/\/[^'"`\s)]+/g)].map((match) => match[0])
+
+  it('references no remote origin from application source, beyond permitted citations', () => {
     for (const source of productionSources) {
-      expect(source.text, `${source.path} references a remote origin`).not.toMatch(
-        /https?:\/\//,
+      const unexpected = remoteOriginsIn(source.text).filter(
+        (origin) => !PERMITTED_CITATIONS.includes(origin),
+      )
+
+      expect(unexpected, `${source.path} references a remote origin`).toEqual([])
+    }
+  })
+
+  it('still permits every citation it names, so the list cannot rot', () => {
+    const referenced = productionSources.flatMap((source) => remoteOriginsIn(source.text))
+
+    for (const citation of PERMITTED_CITATIONS) {
+      expect(referenced, `${citation} is permitted but no longer used`).toContain(citation)
+    }
+  })
+
+  it('never loads a permitted citation, only records it', () => {
+    for (const source of productionSources) {
+      if (remoteOriginsIn(source.text).length === 0) continue
+
+      expect(source.text, `${source.path} loads a remote origin`).not.toMatch(
+        /\bfetch\s*\(|XMLHttpRequest|\.src\s*=|import\s*\(/,
       )
     }
   })

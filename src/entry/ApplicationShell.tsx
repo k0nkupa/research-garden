@@ -8,16 +8,16 @@ import { BareTrunk } from './BareTrunk'
 
 export interface ApplicationShellProps {
   readonly readiness: Readiness
-  /**
-   * Create Garden stays inert until ticket 06, which owns materializing a
-   * Sample Garden into an empty folder.
-   */
   readonly onCreateGarden?: () => void
   readonly onOpenGarden?: () => void
   /** A folder is being scanned; the actions must not be invoked twice. */
   readonly busy?: boolean
   /** A Garden could not be opened, in the person's terms. */
   readonly failure?: string | undefined
+  /** ADR 0060: the folder this browser remembers, if any. */
+  readonly remembered?: { readonly name: string } | undefined
+  readonly onResume?: () => void
+  readonly onForget?: () => void
 }
 
 /**
@@ -34,6 +34,9 @@ export function ApplicationShell({
   onOpenGarden,
   busy = false,
   failure,
+  remembered,
+  onResume,
+  onForget,
 }: ApplicationShellProps) {
   if (readiness.kind === 'unsupported-viewport') {
     return <UnsupportedViewport />
@@ -71,6 +74,17 @@ export function ApplicationShell({
             </button>
           </div>
         </div>
+
+        {remembered && (
+          <p className="trunk-scene__remembered">
+            <button type="button" className="action action--quiet" onClick={onResume}>
+              Resume {remembered.name}
+            </button>
+            <button type="button" className="trunk-scene__forget" onClick={onForget}>
+              Forget it
+            </button>
+          </p>
+        )}
 
         {failure !== undefined && (
           <p className="notice notice--failure" role="alert">

@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { parseGardenDocument, serializeGardenDocument, setFrontmatterField } from './gardenDocument'
+import {
+  parseGardenDocument,
+  serializeGardenDocument,
+  serializeNewGardenDocument,
+  setFrontmatterField,
+} from './gardenDocument'
 
 const wellFormed = `---
 schema_version: 1
@@ -239,5 +244,112 @@ Body text that must not move.
       title: 'New title',
       my_own_field: 'kept',
     })
+  })
+})
+
+// ADR 0078: newly created files use a documented field order, while existing
+// files are never reordered merely because one field changed.
+describe('writing a new document', () => {
+  const ORDER = ['schema_version', 'id', 'kind', 'title', 'state', 'created_at', 'updated_at']
+
+  const frontmatter = {
+    updated_at: '2026-08-02T11:30:00Z',
+    kind: 'branch',
+    id: 'branch_01HQ8X2K3M4N5P6Q7R8S9T0V1W',
+    title: 'Attention mechanisms',
+    created_at: '2026-08-01T10:00:00Z',
+    schema_version: 1,
+    state: 'active',
+  }
+
+  it('emits the fields in the documented order, whatever order they arrived in', () => {
+    const written = serializeNewGardenDocument(frontmatter, 'A body.\n', ORDER)
+    const fields = [...written.matchAll(/^([a-z_]+):/gm)].map((match) => match[1])
+
+    expect(fields).toEqual(ORDER)
+  })
+
+  it('produces a document that parses back to the same fields', () => {
+    const written = serializeNewGardenDocument(frontmatter, 'A body.\n', ORDER)
+    const parsed = parseGardenDocument(written)
+
+    if (!parsed.ok) throw new Error('expected the written document to parse')
+    expect(parsed.document.frontmatter).toEqual(frontmatter)
+  })
+
+  it('produces a document whose body parses back unchanged', () => {
+    const written = serializeNewGardenDocument(frontmatter, 'A body.\n', ORDER)
+    const parsed = parseGardenDocument(written)
+
+    if (!parsed.ok) throw new Error('expected the written document to parse')
+    expect(parsed.document.body).toBe('\nA body.\n')
+  })
+
+  it('keeps a field the order does not name rather than dropping it', () => {
+    const extended = { ...frontmatter, my_own_field: 'kept' }
+    const written = serializeNewGardenDocument(extended, 'A body.\n', ORDER)
+
+    expect(written).toContain('my_own_field: kept')
+  })
+
+  it('places unnamed fields after the ones the order names', () => {
+    const extended = { ...frontmatter, my_own_field: 'kept' }
+    const written = serializeNewGardenDocument(extended, 'A body.\n', ORDER)
+    const fields = [...written.matchAll(/^([a-z_]+):/gm)].map((match) => match[1])
+
+    expect(fields.at(-1)).toBe('my_own_field')
+  })
+
+  it('omits a field that was not set rather than writing an empty one', () => {
+    const written = serializeNewGardenDocument(
+      { ...frontmatter, state: undefined },
+      'A body.\n',
+      ORDER,
+    )
+
+    expect(written).not.toContain('state:')
+  })
+
+  it('serializes a list field readably', () => {
+    const withList = { ...frontmatter, supported_by: ['root_01HQ8X2K3M4N5P6Q7R8S9T0V2X'] }
+    const written = serializeNewGardenDocument(withList, 'A body.\n', ORDER)
+    const parsed = parseGardenDocument(written)
+
+    if (!parsed.ok) throw new Error('expected the written document to parse')
+    expect(parsed.document.frontmatter['supported_by']).toEqual([
+      'root_01HQ8X2K3M4N5P6Q7R8S9T0V2X',
+    ])
+  })
+
+  it('serializes nested relations back to the same shape', () => {
+    const withRelations = {
+      ...frontmatter,
+      relations: [{ type: 'contradicts', target: 'claim_leaf_01HQ8X2K3M4N5P6Q7R8S9T0V2X' }],
+    }
+    const parsed = parseGardenDocument(
+      serializeNewGardenDocument(withRelations, 'A body.\n', ORDER),
+    )
+
+    if (!parsed.ok) throw new Error('expected the written document to parse')
+    expect(parsed.document.frontmatter['relations']).toEqual(withRelations.relations)
+  })
+
+  it('ends the file with exactly one newline', () => {
+    expect(serializeNewGardenDocument(frontmatter, 'A body.', ORDER).endsWith('A body.\n')).toBe(
+      true,
+    )
+  })
+
+  it('does not add a second newline to a body that already ends in one', () => {
+    expect(serializeNewGardenDocument(frontmatter, 'A body.\n\n\n', ORDER)).toMatch(
+      /A body\.\n$/,
+    )
+  })
+
+  it('writes a document with an empty body', () => {
+    const parsed = parseGardenDocument(serializeNewGardenDocument(frontmatter, '', ORDER))
+
+    if (!parsed.ok) throw new Error('expected the written document to parse')
+    expect(parsed.document.body).toBe('')
   })
 })

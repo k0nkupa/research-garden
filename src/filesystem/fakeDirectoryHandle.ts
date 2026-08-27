@@ -21,6 +21,7 @@ function domException(name: string): Error {
 
 interface FakeState {
   permission: GardenPermissionState
+  vanished?: boolean
 }
 
 class FakeFileHandle implements FileHandleLike {
@@ -86,6 +87,11 @@ export class FakeDirectoryHandle implements DirectoryHandleLike {
     this.state.permission = permission
   }
 
+  /** Simulates the folder being moved, renamed, or deleted. */
+  vanish(): void {
+    this.state.vanished = true
+  }
+
   ensureDirectory(name: string): FakeDirectoryHandle {
     const existing = this.#directories.get(name)
     if (existing) return existing
@@ -114,6 +120,7 @@ export class FakeDirectoryHandle implements DirectoryHandleLike {
 
   async *entries(): AsyncIterableIterator<[string, DirectoryHandleLike | FileHandleLike]> {
     this.#assertPermitted()
+    if (this.state.vanished) throw domException('NotFoundError')
     for (const [name] of this.#files) {
       yield [name, new FakeFileHandle(name, this, this.state)]
     }
@@ -127,6 +134,7 @@ export class FakeDirectoryHandle implements DirectoryHandleLike {
     options?: { create?: boolean },
   ): Promise<DirectoryHandleLike> {
     this.#assertPermitted()
+    if (this.state.vanished) throw domException('NotFoundError')
     if (this.#files.has(name)) throw domException('TypeMismatchError')
 
     const existing = this.#directories.get(name)

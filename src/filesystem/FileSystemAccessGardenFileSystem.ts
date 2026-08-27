@@ -63,8 +63,13 @@ export class FileSystemAccessGardenFileSystem implements GardenFileSystem {
     await this.#assertPermitted()
 
     const handle = await this.#resolveDirectory(directory, { create: false })
-    // A typed directory the Garden has no items for is legitimately absent.
-    if (handle === undefined) return []
+    if (handle === undefined) {
+      // A typed directory the Garden has no items for is legitimately absent --
+      // but so is every directory when the folder itself has been moved or
+      // deleted, and that must not read as an empty Garden.
+      await this.#assertRepositoryReachable()
+      return []
+    }
 
     return this.#collectFiles(handle, directory)
   }
@@ -100,6 +105,21 @@ export class FileSystemAccessGardenFileSystem implements GardenFileSystem {
       await writable.close()
     } catch (error) {
       throw this.#translate(error, path)
+    }
+  }
+
+  /**
+   * Confirms the selected folder still exists.
+   *
+   * Without this, a remembered folder that has since been deleted or renamed
+   * would report every typed directory as merely absent, and a person's Garden
+   * would appear to have quietly emptied itself.
+   */
+  async #assertRepositoryReachable(): Promise<void> {
+    try {
+      await this.root.entries().next()
+    } catch (error) {
+      throw this.#translate(error, [this.root.name])
     }
   }
 
