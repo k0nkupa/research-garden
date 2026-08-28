@@ -2,6 +2,7 @@ import { hierarchy, tree, type HierarchyPointNode } from 'd3-hierarchy'
 import type { GardenIndex } from '../domain/index/gardenIndex'
 import type { GardenItemKind } from '../domain/schema/gardenItem'
 import type { RelationType } from '../domain/schema/relations'
+import { UNFOCUSED, visibleTreeRows, type TreeRow, type TreeViewState } from './treeView'
 
 /**
  * Geometry for the Tree.
@@ -20,6 +21,10 @@ export interface TreeNode {
   readonly depth: number
   readonly x: number
   readonly y: number
+  /** ADR 0031: a Dormant Branch recedes without leaving the Tree. */
+  readonly dormant: boolean
+  readonly hasChildren: boolean
+  readonly expanded: boolean
 }
 
 export interface TreeLink {
@@ -102,26 +107,45 @@ interface LayoutSubject {
   readonly childIds: readonly string[]
 }
 
-export function computeTreeLayout(index: GardenIndex): TreeLayout {
-  // Only ids the index actually holds become subjects. An id that resolved to
+/**
+ * Only what the current view is showing reaches the layout.
+ *
+ * This is where ADR 0061's promise that collapse and focus bound the drawn Tree
+ * is actually kept: a folded Branch's descendants are never laid out, never
+ * measured, and never emitted, so the SVG shrinks rather than merely hiding
+ * things.
+ */
+export function computeTreeLayout(
+  index: GardenIndex,
+  view: TreeViewState = UNFOCUSED,
+  /** Passed in when the caller already has them, so the Tree is walked once. */
+  rows: readonly TreeRow[] = visibleTreeRows(index, view),
+): TreeLayout {
+  const shown = new Map(rows.map((row) => [row.id, row]))
+
+  // Only rows the view is showing become subjects. An id that resolved to
   // nothing would otherwise have to be drawn as some kind, and drawing it as
   // the wrong one is worse than not drawing it (ADR 0052).
   const subjectsFor = (ids: readonly string[]): LayoutSubject[] =>
     ids.flatMap((id) => {
+      const row = shown.get(id)
       const indexed = index.items.get(id)
-      if (!indexed) return []
+      if (!row || !indexed) return []
       return [
         {
           id,
-          title: indexed.item.title,
-          kind: indexed.item.kind,
-          childIds: indexed.childIds,
+          title: row.title,
+          kind: row.kind,
+          // A collapsed Branch contributes no descendants to the drawing.
+          childIds: row.expanded ? indexed.childIds : [],
         },
       ]
     })
 
+  const trunkChildren = rows.filter((row) => row.depth === 1).map((row) => row.id)
+
   const root = hierarchy<LayoutSubject>(
-    { id: TRUNK, title: 'Garden', kind: undefined, childIds: index.topLevelIds },
+    { id: TRUNK, title: 'Garden', kind: undefined, childIds: trunkChildren },
     (subject) => subjectsFor(subject.childIds),
   )
 
@@ -131,16 +155,23 @@ export function computeTreeLayout(index: GardenIndex): TreeLayout {
 
   const placed = positioned.descendants().filter((node) => node.data.id !== TRUNK)
 
-  const nodes: TreeNode[] = placed.map((node) => ({
-    id: node.data.id as string,
-    title: node.data.title,
-    // Every drawn node came from the index, so its kind is known.
-    kind: node.data.kind as GardenItemKind,
-    // The synthetic trunk occupies depth 0, so a top-level item reads as depth 1.
-    depth: node.depth,
-    x: node.x,
-    y: node.y,
-  }))
+  const nodes: TreeNode[] = placed.map((node) => {
+    const row = shown.get(node.data.id as string)
+
+    return {
+      id: node.data.id as string,
+      title: node.data.title,
+      // Every drawn node came from the index, so its kind is known.
+      kind: node.data.kind as GardenItemKind,
+      // The synthetic trunk occupies depth 0, so a top-level item reads as depth 1.
+      depth: node.depth,
+      x: node.x,
+      y: node.y,
+      dormant: row?.dormant ?? false,
+      hasChildren: row?.hasChildren ?? false,
+      expanded: row?.expanded ?? false,
+    }
+  })
 
   const links: TreeLink[] = positioned
     .links()
@@ -158,6 +189,8 @@ export function computeTreeLayout(index: GardenIndex): TreeLayout {
   const crossLinks: TreeCrossLink[] = index.graph.relationships
     .filter((relationship) => relationship.type !== 'parent')
     .flatMap((relationship) => {
+      // A Cross-link to something the view has folded away is not drawn: it
+      // would have nowhere to land.
       const source = placedById.get(relationship.sourceId)
       const target = placedById.get(relationship.targetId)
       if (!source || !target) return []

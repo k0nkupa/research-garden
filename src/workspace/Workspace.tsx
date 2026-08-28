@@ -4,6 +4,7 @@ import { diagnosticsForItem } from '../garden/mutationGuard'
 import { DiagnosticsPanel } from './DiagnosticsPanel'
 import { GardenTree } from './GardenTree'
 import { ItemPanel } from './ItemPanel'
+import { UNFOCUSED, type TreeViewState } from './treeView'
 
 /**
  * The Garden workspace.
@@ -26,6 +27,8 @@ export interface WorkspaceProps {
 export function Workspace({ garden }: WorkspaceProps) {
   const [selectedId, setSelectedId] = useState<string | undefined>(undefined)
   const [showingDiagnostics, setShowingDiagnostics] = useState(false)
+  // View state only: what the Tree is showing, never what the Garden holds.
+  const [view, setView] = useState<TreeViewState>(UNFOCUSED)
 
   const selected = selectedId === undefined ? undefined : garden.index.items.get(selectedId)
   const diagnostics = garden.index.diagnostics
@@ -51,6 +54,17 @@ export function Workspace({ garden }: WorkspaceProps) {
       <div className="workspace__bar">
         <span className="workspace__repository">{garden.repositoryName}</span>
 
+        {view.focusedId !== undefined && (
+          <button
+            type="button"
+            className="workspace__focus"
+            onClick={() => setView({ ...view, focusedId: undefined })}
+          >
+            Focused on {garden.index.items.get(view.focusedId)?.item.title ?? 'a Branch'} — show
+            the whole Tree
+          </button>
+        )}
+
         {diagnostics.length > 0 && (
           <button
             type="button"
@@ -70,6 +84,8 @@ export function Workspace({ garden }: WorkspaceProps) {
             selectedId={selectedId}
             diagnosedIds={diagnosedIds}
             onSelect={selectItem}
+            view={view}
+            onViewChange={setView}
           />
         </div>
 

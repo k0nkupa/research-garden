@@ -191,6 +191,11 @@ body {
   color: color-mix(in srgb, var(--bark) 82%, transparent);
 }
 
+/*
+ * Reduced motion is honoured globally rather than per component, so a
+ * transition added later cannot quietly opt out of it. The Tree's pan and zoom
+ * still work; they simply arrive without being animated there.
+ */
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
@@ -198,6 +203,7 @@ body {
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
   }
 }
 
@@ -256,8 +262,24 @@ body {
   min-width: 0;
   padding: 1.5rem;
   display: flex;
-  /* The Tree is drawn at natural size; ticket 08 replaces this with pan and zoom. */
   overflow: auto;
+}
+
+/*
+ * The surface a drag pans. It fills the pane so there is somewhere to grab
+ * that is not a node -- and a drag starting on a node pans too, because ADR
+ * 0042 gives dragging exactly one meaning: move the view, never an item.
+ */
+.garden-tree__canvas {
+  flex: 1;
+  display: flex;
+  min-width: 0;
+  cursor: grab;
+  touch-action: none;
+}
+
+.garden-tree__canvas:active {
+  cursor: grabbing;
 }
 
 /*
@@ -269,6 +291,8 @@ body {
 .garden-tree {
   flex: none;
   margin: auto;
+  transform-origin: center;
+  transition: transform 120ms ease-out;
 }
 
 .garden-tree__links path {
@@ -384,6 +408,55 @@ body {
 .garden-tree__node:focus-visible {
   outline: 2px solid var(--pollen);
   outline-offset: 4px;
+}
+
+/*
+ * ADR 0031: a Dormant Branch recedes from the permanent Tree while remaining
+ * canonical, searchable, and focusable. Receded, not hidden -- the seasonal
+ * metaphor, not archive semantics.
+ */
+/*
+ * Enough to recede, not so much that the label stops being readable: ADR 0044
+ * asks for an accessible colour treatment, and a Dormant Branch is still
+ * something a person is meant to be able to find.
+ */
+.garden-tree__node--dormant {
+  opacity: 0.62;
+}
+
+/*
+ * Receding is done with opacity alone. Dashing the outline was tried and
+ * fragments the glyph at this size, and ADR 0044 makes shape the carrier that
+ * has to survive -- a Branch must still read as a Branch when it is dormant.
+ * The accessible name says "dormant" outright, so nothing rests on the visual.
+ */
+.garden-tree__node--dormant:focus-visible,
+.garden-tree__node--selected.garden-tree__node--dormant {
+  opacity: 1;
+}
+
+/* A folded Branch says so, so hidden work is never simply absent. */
+.garden-tree__collapsed-marker {
+  font-family: var(--metadata);
+  font-size: 15px;
+  font-weight: 700;
+  fill: var(--canopy);
+}
+
+.workspace__focus {
+  font-family: var(--metadata);
+  font-size: 0.75rem;
+  padding: 0.2rem 0.6rem;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--canopy) 45%, transparent);
+  background: color-mix(in srgb, var(--canopy) 10%, transparent);
+  color: var(--canopy);
+  cursor: pointer;
+}
+
+.workspace__focus:focus-visible {
+  outline: 2px solid var(--pollen);
+  outline-offset: 2px;
 }
 
 /* Selected-item panel (ADR 0041) */

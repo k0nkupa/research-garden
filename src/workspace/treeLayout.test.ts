@@ -276,3 +276,80 @@ describe('Cross-links in the layout', () => {
     expect(layout.crossLinks).toEqual([])
   })
 })
+
+/**
+ * ADR 0061: collapse and focus bound the drawn Tree. Bounding the node count is
+ * only half of it -- a Cross-link to something no longer on screen would have
+ * nowhere to land.
+ */
+describe('what collapse and focus do to the drawing', () => {
+  const R = 'root_01HQ8X2K3M4N5P6Q7R8S9T0R1W'
+  const C1 = 'claim_leaf_01HQ8X2K3M4N5P6Q7R8S9T0C1W'
+  const C2 = 'claim_leaf_01HQ8X2K3M4N5P6Q7R8S9T0C2W'
+  const TOPIC = 'branch_01HQ8X2K3M4N5P6Q7R8S9T0B1W'
+  const OTHER = 'branch_01HQ8X2K3M4N5P6Q7R8S9T0B2W'
+
+  const doc = (lines: string[]) =>
+    ['---', 'schema_version: 1', ...lines, 'created_at: 2026-08-01T10:00:00Z',
+      'updated_at: 2026-08-01T10:00:00Z', '---', '', 'A body.', ''].join('\n')
+
+  async function contradictingGarden() {
+    const index = await buildGardenIndex([
+      { path: ['branches', 'a.md'], text: doc([`id: ${TOPIC}`, 'kind: branch', 'title: Topic', 'state: active']) },
+      { path: ['branches', 'b.md'], text: doc([`id: ${OTHER}`, 'kind: branch', 'title: Other', 'state: active']) },
+      { path: ['roots', 'r.md'], text: doc([`id: ${R}`, 'kind: root', 'title: Evidence', 'captured_at: 2026-08-01T09:00:00Z', 'content_hash: sha256:x']) },
+      { path: ['leaves', 'c1.md'], text: doc([`id: ${C1}`, 'kind: claim_leaf', 'title: One', `parent_id: ${TOPIC}`, 'supported_by:', `  - ${R}`, 'relations:', '  - type: contradicts', `    target: ${C2}`]) },
+      { path: ['leaves', 'c2.md'], text: doc([`id: ${C2}`, 'kind: claim_leaf', 'title: Two', `parent_id: ${TOPIC}`, 'supported_by:', `  - ${R}`]) },
+    ])
+    expect(index.diagnostics, JSON.stringify(index.diagnostics)).toEqual([])
+    return index
+  }
+
+  it('draws every node when nothing is collapsed', async () => {
+    expect(computeTreeLayout(await contradictingGarden()).nodes).toHaveLength(5)
+  })
+
+  it('draws fewer nodes once a Branch is collapsed', async () => {
+    const layout = computeTreeLayout(await contradictingGarden(), {
+      collapsedIds: new Set([TOPIC]),
+      focusedId: undefined,
+    })
+
+    expect(layout.nodes).toHaveLength(3)
+  })
+
+  it('draws no Cross-link to a node that has been folded away', async () => {
+    const layout = computeTreeLayout(await contradictingGarden(), {
+      collapsedIds: new Set([TOPIC]),
+      focusedId: undefined,
+    })
+
+    expect(layout.crossLinks).toEqual([])
+  })
+
+  it('keeps the Cross-links between nodes that are both still drawn', async () => {
+    const layout = computeTreeLayout(await contradictingGarden())
+
+    expect(layout.crossLinks.filter((link) => link.type === 'contradicts')).toHaveLength(1)
+  })
+
+  it('drops a Cross-link whose far end is outside the focused Branch', async () => {
+    const layout = computeTreeLayout(await contradictingGarden(), {
+      collapsedIds: new Set(),
+      focusedId: TOPIC,
+    })
+
+    // The Root sits outside the focused Branch, so its evidence links have
+    // nowhere to land; the contradiction between the two Claims survives.
+    expect(layout.crossLinks.filter((link) => link.type === 'supports')).toEqual([])
+    expect(layout.crossLinks.filter((link) => link.type === 'contradicts')).toHaveLength(1)
+  })
+
+  it('shrinks the drawn box when the Tree is narrowed', async () => {
+    const index = await contradictingGarden()
+    const whole = computeTreeLayout(index)
+    const narrowed = computeTreeLayout(index, { collapsedIds: new Set(), focusedId: OTHER })
+
+    expect(narrowed.viewBox.width).toBeLessThan(whole.viewBox.width)
+  })
+})

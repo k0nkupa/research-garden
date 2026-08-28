@@ -2,7 +2,7 @@
  * @vitest-environment jsdom
  */
 import { describe, expect, it } from 'vitest'
-import { render, screen, waitFor } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { buildGardenIndex } from '../domain/index/gardenIndex'
 import { InMemoryGardenFileSystem } from '../filesystem/InMemoryGardenFileSystem'
@@ -873,5 +873,294 @@ describe('non-image Attachments', () => {
 
     expect(container.querySelector('.item-panel__body a')).toBeNull()
     expect(container.textContent).toContain('escape')
+  })
+})
+
+/**
+ * ADR 0042: pan, zoom, select, collapse, focus, and keyboard traversal — and
+ * deliberately no drag-to-reparent.
+ */
+describe('navigating the Tree', () => {
+  const B = (n: string) => `branch_01HQ8X2K3M4N5P6Q7R8S9T0${n}W`
+  const Q = (n: string) => `question_leaf_01HQ8X2K3M4N5P6Q7R8S9T0${n}W`
+
+  const TOPIC = B('B1')
+  const DORMANT = B('B3')
+  const LEAF = Q('Q1')
+
+  const doc = (lines: string[]) =>
+    ['---', 'schema_version: 1', ...lines, 'created_at: 2026-08-01T10:00:00Z',
+      'updated_at: 2026-08-01T10:00:00Z', '---', '', 'A body.', ''].join('\n')
+
+  async function renderTree() {
+    const index = await buildGardenIndex([
+      { path: ['branches', 'a.md'], text: doc([`id: ${TOPIC}`, 'kind: branch', 'title: Topic', 'state: active']) },
+      { path: ['leaves', 'q.md'], text: doc([`id: ${LEAF}`, 'kind: question_leaf', 'title: A question', `parent_id: ${TOPIC}`]) },
+      { path: ['branches', 'd.md'], text: doc([`id: ${DORMANT}`, 'kind: branch', 'title: Set aside', 'state: dormant']) },
+    ])
+    expect(index.diagnostics, JSON.stringify(index.diagnostics)).toEqual([])
+    return render(<Workspace garden={{ repositoryName: 'g', index, fileSystem: emptyRepository() }} />)
+  }
+
+  const node = (name: RegExp) => screen.getByRole('treeitem', { name })
+
+  it('puts exactly one node in the tab order', async () => {
+    await renderTree()
+
+    const tabbable = screen.getAllByRole('treeitem').filter((n) => n.getAttribute('tabindex') === '0')
+    expect(tabbable).toHaveLength(1)
+  })
+
+  it('moves focus itself between nodes with the arrow keys alone', async () => {
+    await renderTree()
+    const rows = screen.getAllByRole('treeitem')
+    ;(rows[0] as HTMLElement).focus()
+
+    await userEvent.keyboard('{ArrowDown}')
+
+    // Focus, not merely the tab order: shifting tabindex while the browser's
+    // focus stays put leaves a screen reader on the first node forever.
+    expect(document.activeElement).toBe(screen.getAllByRole('treeitem')[1])
+    expect(screen.getAllByRole('treeitem')[1]).toHaveAttribute('tabindex', '0')
+  })
+
+  it('keeps moving on a second arrow press, from wherever it landed', async () => {
+    await renderTree()
+    ;(screen.getAllByRole('treeitem')[0] as HTMLElement).focus()
+
+    await userEvent.keyboard('{ArrowDown}{ArrowDown}')
+
+    expect(document.activeElement).toBe(screen.getAllByRole('treeitem')[2])
+  })
+
+  it('moves back up again', async () => {
+    await renderTree()
+    ;(screen.getAllByRole('treeitem')[0] as HTMLElement).focus()
+
+    await userEvent.keyboard('{ArrowDown}{ArrowDown}{ArrowUp}')
+
+    expect(document.activeElement).toBe(screen.getAllByRole('treeitem')[1])
+  })
+
+  it('selects with Enter, without a pointer', async () => {
+    await renderTree()
+    node(/Topic/).focus()
+
+    await userEvent.keyboard('{Enter}')
+
+    expect(screen.getByRole('heading', { level: 2, name: 'Topic' })).toBeInTheDocument()
+  })
+
+  it('collapses a Branch with the left arrow', async () => {
+    await renderTree()
+    node(/^Branch: Topic/).focus()
+
+    await userEvent.keyboard('{ArrowLeft}')
+
+    expect(node(/^Branch: Topic/)).toHaveAttribute('aria-expanded', 'false')
+    expect(screen.queryByRole('treeitem', { name: /A question/ })).not.toBeInTheDocument()
+  })
+
+  it('expands it again with the right arrow', async () => {
+    await renderTree()
+    node(/^Branch: Topic/).focus()
+
+    await userEvent.keyboard('{ArrowLeft}{ArrowRight}')
+
+    expect(screen.getByRole('treeitem', { name: /A question/ })).toBeInTheDocument()
+  })
+
+  it('focuses a Branch from the keyboard', async () => {
+    await renderTree()
+    node(/^Branch: Topic/).focus()
+
+    await userEvent.keyboard('f')
+
+    expect(screen.queryByRole('treeitem', { name: /Set aside/ })).not.toBeInTheDocument()
+    expect(screen.getByRole('treeitem', { name: /^Branch: Topic/ })).toBeInTheDocument()
+  })
+
+  it('offers a way back out of focus, and takes it', async () => {
+    await renderTree()
+    node(/^Branch: Topic/).focus()
+    await userEvent.keyboard('f')
+
+    await userEvent.click(screen.getByRole('button', { name: /show the whole Tree/i }))
+
+    expect(screen.getByRole('treeitem', { name: /Set aside/ })).toBeInTheDocument()
+  })
+
+  it('leaves focus with Escape', async () => {
+    await renderTree()
+    node(/^Branch: Topic/).focus()
+    await userEvent.keyboard('f')
+
+    node(/^Branch: Topic/).focus()
+    await userEvent.keyboard('{Escape}')
+
+    expect(screen.getByRole('treeitem', { name: /Set aside/ })).toBeInTheDocument()
+  })
+
+  // ADR 0014: focus is a view, so nothing canonical may move.
+  it('changes no canonical relationship when focusing', async () => {
+    await renderTree()
+    node(/^Branch: Topic/).focus()
+    await userEvent.keyboard('f')
+    await userEvent.click(screen.getByRole('button', { name: /show the whole Tree/i }))
+
+    expect(screen.getByRole('treeitem', { name: /A question/ })).toHaveAttribute('aria-level', '2')
+  })
+
+  // ADR 0031: dormant recedes, but stays present and focusable.
+  it('keeps a Dormant Branch in the Tree and says it is dormant', async () => {
+    await renderTree()
+
+    expect(node(/Set aside/)).toHaveAccessibleName(/dormant/i)
+  })
+
+  it('lets a Dormant Branch be focused like any other', async () => {
+    await renderTree()
+    node(/Set aside/).focus()
+
+    await userEvent.keyboard('f')
+
+    expect(screen.queryByRole('treeitem', { name: /^Branch: Topic/ })).not.toBeInTheDocument()
+    expect(screen.getByRole('treeitem', { name: /Set aside/ })).toBeInTheDocument()
+  })
+
+  it('marks a Branch that has children as expandable', async () => {
+    await renderTree()
+
+    expect(node(/^Branch: Topic/)).toHaveAttribute('aria-expanded', 'true')
+  })
+
+  it('gives a childless node no expanded state at all', async () => {
+    await renderTree()
+
+    expect(node(/A question/)).not.toHaveAttribute('aria-expanded')
+  })
+
+  /** The transform is the viewport; there is no separate state to read. */
+  const viewportOf = (container: HTMLElement) => {
+    const transform = (container.querySelector('[role="tree"]') as SVGElement).style.transform
+    const [, x, y] = /translate\(([-\d.]+)px, ([-\d.]+)px\)/.exec(transform) ?? []
+    const [, scale] = /scale\(([-\d.]+)\)/.exec(transform) ?? []
+    return { x: Number(x), y: Number(y), scale: Number(scale) }
+  }
+
+  it('pans when the canvas is dragged', async () => {
+    const { container } = await renderTree()
+    const canvas = screen.getByTestId('tree-canvas')
+
+    fireEvent.pointerDown(canvas, { clientX: 100, clientY: 100, button: 0 })
+    fireEvent.pointerMove(canvas, { clientX: 160, clientY: 130 })
+    fireEvent.pointerUp(canvas)
+
+    expect(viewportOf(container)).toMatchObject({ x: 60, y: 30 })
+  })
+
+  // A right-click sends no matching pointerup here, so arming on it would leave
+  // the Tree panning on buttonless movement.
+  it('does not pan on a secondary-button drag', async () => {
+    const { container } = await renderTree()
+    const canvas = screen.getByTestId('tree-canvas')
+
+    fireEvent.pointerDown(canvas, { clientX: 100, clientY: 100, button: 2 })
+    fireEvent.pointerMove(canvas, { clientX: 400, clientY: 400 })
+
+    expect(viewportOf(container)).toMatchObject({ x: 0, y: 0 })
+  })
+
+  it('stops panning once the pointer is released', async () => {
+    const { container } = await renderTree()
+    const canvas = screen.getByTestId('tree-canvas')
+
+    fireEvent.pointerDown(canvas, { clientX: 0, clientY: 0, button: 0 })
+    fireEvent.pointerMove(canvas, { clientX: 50, clientY: 50 })
+    fireEvent.pointerUp(canvas)
+    fireEvent.pointerMove(canvas, { clientX: 400, clientY: 400 })
+
+    expect(viewportOf(container)).toMatchObject({ x: 50, y: 50 })
+  })
+
+  // Unbounded panning would let a person lose their Garden off the pane.
+  it('bounds how far the Tree can be pushed away', async () => {
+    const { container } = await renderTree()
+    const canvas = screen.getByTestId('tree-canvas')
+
+    fireEvent.pointerDown(canvas, { clientX: 0, clientY: 0, button: 0 })
+    fireEvent.pointerMove(canvas, { clientX: 999_999, clientY: 999_999 })
+
+    const { x, y } = viewportOf(container)
+    expect(x).toBeLessThanOrEqual(2000)
+    expect(y).toBeLessThanOrEqual(2000)
+  })
+
+  it('zooms on the wheel', async () => {
+    const { container } = await renderTree()
+
+    fireEvent.wheel(screen.getByTestId('tree-canvas'), { deltaY: -100 })
+
+    expect(viewportOf(container).scale).toBeGreaterThan(1)
+  })
+
+  it('zooms back out', async () => {
+    const { container } = await renderTree()
+
+    fireEvent.wheel(screen.getByTestId('tree-canvas'), { deltaY: 100 })
+
+    expect(viewportOf(container).scale).toBeLessThan(1)
+  })
+
+  it('stops zooming out at the smallest readable scale', async () => {
+    const { container } = await renderTree()
+    const canvas = screen.getByTestId('tree-canvas')
+
+    for (let at = 0; at < 40; at += 1) fireEvent.wheel(canvas, { deltaY: 100 })
+
+    expect(viewportOf(container).scale).toBeCloseTo(0.3, 5)
+  })
+
+  it('stops zooming in at the largest scale', async () => {
+    const { container } = await renderTree()
+    const canvas = screen.getByTestId('tree-canvas')
+
+    for (let at = 0; at < 40; at += 1) fireEvent.wheel(canvas, { deltaY: -100 })
+
+    expect(viewportOf(container).scale).toBeCloseTo(3, 5)
+  })
+
+  it('states where each node sits among its siblings', async () => {
+    await renderTree()
+
+    const topLevel = screen.getAllByRole('treeitem').filter(
+      (n) => n.getAttribute('aria-level') === '1',
+    )
+    for (const n of topLevel) {
+      expect(n).toHaveAttribute('aria-setsize', String(topLevel.length))
+      expect(Number(n.getAttribute('aria-posinset'))).toBeGreaterThan(0)
+    }
+  })
+
+  /**
+   * ADR 0042: dragging has exactly one meaning, and it is not reparenting.
+   * Dragging a node moves the view; the Tree comes back unchanged.
+   */
+  it('does not reparent anything when a node is dragged onto another', async () => {
+    await renderTree()
+    const dragged = node(/A question/)
+
+    fireEvent.pointerDown(dragged, { clientX: 10, clientY: 10, bubbles: true })
+    fireEvent.pointerMove(dragged, { clientX: 300, clientY: 300, bubbles: true })
+    fireEvent.pointerUp(dragged, { bubbles: true })
+
+    expect(node(/A question/)).toHaveAttribute('aria-level', '2')
+    expect(node(/^Branch: Topic/)).toHaveAttribute('aria-level', '1')
+  })
+
+  it('exposes no draggable node at all', async () => {
+    const { container } = await renderTree()
+
+    expect(container.querySelector('[draggable="true"]')).toBeNull()
   })
 })
