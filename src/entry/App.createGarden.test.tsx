@@ -68,7 +68,7 @@ function TestApp({
 
   return (
     <ApplicationShell
-      readiness={{ kind: 'ready', agentInterfaceAvailable: false }}
+      readiness={{ kind: 'ready', agentInterface: 'unsupported' }}
       onCreateGarden={createFromPicker}
       onOpenGarden={openFromPicker}
       busy={session.kind === 'working'}

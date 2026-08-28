@@ -21,9 +21,10 @@ function readReadiness(): Readiness {
  * Wires live browser capability and viewport state into the shell, and holds
  * the open Garden for this session.
  *
- * Capabilities and viewport are re-read together on resize, because the
- * viewport is the only one of the two that changes during a session: a browser
- * does not gain or lose File System Access or WebMCP mid-page.
+ * Capabilities and viewport are re-read together on resize, and again on
+ * `online`/`offline`: of the three signals resolveReadiness depends on,
+ * connectivity is the one that legitimately changes mid-session (ADR 0072). A
+ * browser does not gain or lose File System Access or WebMCP mid-page.
  */
 export function App() {
   const [readiness, setReadiness] = useState<Readiness>(readReadiness)
@@ -44,7 +45,13 @@ export function App() {
 
     resolve()
     window.addEventListener('resize', resolve)
-    return () => window.removeEventListener('resize', resolve)
+    window.addEventListener('online', resolve)
+    window.addEventListener('offline', resolve)
+    return () => {
+      window.removeEventListener('resize', resolve)
+      window.removeEventListener('online', resolve)
+      window.removeEventListener('offline', resolve)
+    }
   }, [])
 
   // An unsupported environment is described before anything else, so a Garden

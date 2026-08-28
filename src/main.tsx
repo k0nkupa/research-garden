@@ -1,6 +1,7 @@
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import { App } from './entry/App'
+import { registerServiceWorker } from './entry/offline-shell/registerServiceWorker'
 import './styles/fonts'
 import './styles/app.css'
 
@@ -12,3 +13,6 @@ createRoot(root).render(
     <App />
   </StrictMode>,
 )
+
+// ADR 0072: after an initial load, the human interface keeps working offline.
+registerServiceWorker()

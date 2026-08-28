@@ -166,27 +166,31 @@ describe('no product telemetry (ADR 0073)', () => {
 })
 
 /**
+ * Operating a folder through the browser. `requestPermission` is deliberately
+ * absent: it is also the port's own method name, so including it would flag
+ * callers of the port rather than callers of the browser.
+ *
+ * Hoisted to module scope so both the layering rules below and the offline
+ * shell rules further down enforce the same list, rather than two lists that
+ * could quietly drift apart.
+ */
+const BROWSER_FILESYSTEM_API = [
+  'showDirectoryPicker',
+  'FileSystemDirectoryHandle',
+  'FileSystemFileHandle',
+  'FileSystemWritableFileStream',
+  'getDirectoryHandle',
+  'getFileHandle',
+  'createWritable',
+  'queryPermission',
+]
+
+/**
  * ADR 0065 separates domain, filesystem, UI, and WebMCP. That separation is
  * what makes the domain testable without a browser, so it is enforced here
  * rather than left to habit.
  */
 describe('layering (ADR 0065)', () => {
-  /**
-   * Operating a folder through the browser. `requestPermission` is deliberately
-   * absent: it is also the port's own method name, so including it would flag
-   * callers of the port rather than callers of the browser.
-   */
-  const BROWSER_FILESYSTEM_API = [
-    'showDirectoryPicker',
-    'FileSystemDirectoryHandle',
-    'FileSystemFileHandle',
-    'FileSystemWritableFileStream',
-    'getDirectoryHandle',
-    'getFileHandle',
-    'createWritable',
-    'queryPermission',
-  ]
-
   /**
    * Capability detection legitimately names the picker without operating it:
    * ADR 0059 requires local-folder access to be feature-detected, and that
@@ -245,6 +249,62 @@ describe('client-only build (ADR 0002, ADR 0048)', () => {
   it('depends on no server framework or application data backend client', () => {
     expectNoneInstalled(['express', 'fastify', 'koa', 'next', 'remix', '@remix-run/node',
       'pg', 'mysql2', 'mongodb', 'better-sqlite3', '@supabase/supabase-js', 'firebase'])
+  })
+})
+
+/**
+ * ADR 0072: the service worker caches the application shell, never the
+ * Garden. The stronger claim ticket 16 makes is that this is true "by
+ * construction" — Garden files (read through File System Access) and WebMCP
+ * tool results never travel as `fetch` requests in the first place, so the
+ * service worker's fetch handler has no code path that could ever see them,
+ * let alone cache them.
+ *
+ * A prose comment asserting that is not proof. This makes it checkable: the
+ * offline shell's own source can be shown to contain neither a File System
+ * Access token nor a WebMCP token anywhere at all, which is the strongest
+ * available substitute for "there is no path" — it establishes there is not
+ * even a *reference*, functioning or not.
+ */
+describe('the offline shell caches only the application shell, never the Garden (ADR 0072)', () => {
+  /**
+   * A directory prefix, not a hand-maintained file list: every file that will
+   * ever belong to the offline shell lives in this one place (mirroring
+   * src/filesystem/'s role in the layering rules above), so a new offline-shell
+   * file is covered automatically instead of silently escaping these checks
+   * until someone remembers to add it to a list.
+   */
+  const OFFLINE_SHELL_DIRECTORY = 'src/entry/offline-shell/'
+
+  const offlineShellSources = productionSources.filter((source) =>
+    source.path.startsWith(OFFLINE_SHELL_DIRECTORY),
+  )
+
+  it('exists, so this suite is not checking an absent feature', () => {
+    expect(offlineShellSources.length).toBeGreaterThan(0)
+  })
+
+  it('never references the browser File System Access API Garden files are read through', () => {
+    const offenders = offlineShellSources
+      .filter((source) => BROWSER_FILESYSTEM_API.some((name) => source.text.includes(name)))
+      .map((source) => source.path)
+
+    expect(offenders).toEqual([])
+  })
+
+  /**
+   * `modelContext` is the WebMCP agent tool registry capabilities.ts detects
+   * on `navigator`. Its absence here means the offline shell has no code path
+   * toward WebMCP tool calls or their results at all — tool results are
+   * unreachable from the service worker, not merely unlisted from an
+   * allowlist.
+   */
+  it('never references the WebMCP tool registry tool results flow through', () => {
+    const offenders = offlineShellSources
+      .filter((source) => source.text.includes('modelContext'))
+      .map((source) => source.path)
+
+    expect(offenders).toEqual([])
   })
 })
 

@@ -7,8 +7,9 @@ import userEvent from '@testing-library/user-event'
 import { ApplicationShell } from './ApplicationShell'
 import type { Readiness } from '../capabilities/capabilities'
 
-const ready: Readiness = { kind: 'ready', agentInterfaceAvailable: true }
-const readyWithoutAgent: Readiness = { kind: 'ready', agentInterfaceAvailable: false }
+const ready: Readiness = { kind: 'ready', agentInterface: 'available' }
+const readyWithoutAgent: Readiness = { kind: 'ready', agentInterface: 'unsupported' }
+const readyOffline: Readiness = { kind: 'ready', agentInterface: 'offline' }
 const noFolderAccess: Readiness = {
   kind: 'unsupported-browser',
   missing: 'local-folder-access',
@@ -65,6 +66,7 @@ describe('the absence of an account model', () => {
   const everyReadiness: readonly Readiness[] = [
     ready,
     readyWithoutAgent,
+    readyOffline,
     noFolderAccess,
     smallScreen,
   ]
@@ -118,6 +120,32 @@ describe('a browser without WebMCP', () => {
   })
 })
 
+describe('a browser offline', () => {
+  // ADR 0072: browser-agent workflows require the host connection even though
+  // WebMCP itself is supported here, so the human interface stays complete.
+  it('still offers the complete human interface', () => {
+    render(<ApplicationShell readiness={readyOffline} />)
+
+    expect(screen.getByRole('button', { name: /create garden/i })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /open garden/i })).toBeInTheDocument()
+  })
+
+  it('explains that agent workflows need the connection, not the browser', () => {
+    render(<ApplicationShell readiness={readyOffline} />)
+
+    expect(screen.getByRole('status')).toHaveTextContent(/offline/i)
+  })
+
+  // The two reasons must read differently: an unsupported browser will never
+  // gain WebMCP, but an offline one already has it and is only waiting on the
+  // network, so the copy must not claim the browser itself lacks WebMCP.
+  it('does not claim the browser lacks WebMCP when only the connection is missing', () => {
+    render(<ApplicationShell readiness={readyOffline} />)
+
+    expect(screen.getByRole('status')).not.toHaveTextContent(/does not support/i)
+  })
+})
+
 describe('a screen below the supported desktop size', () => {
   it('explains the compatible desktop browser requirement', () => {
     render(<ApplicationShell readiness={smallScreen} />)
@@ -143,7 +171,13 @@ describe('a screen below the supported desktop size', () => {
 })
 
 describe('domain vocabulary (docs/agents/domain.md)', () => {
-  const everyScreen: readonly Readiness[] = [ready, readyWithoutAgent, noFolderAccess, smallScreen]
+  const everyScreen: readonly Readiness[] = [
+    ready,
+    readyWithoutAgent,
+    readyOffline,
+    noFolderAccess,
+    smallScreen,
+  ]
 
   // CONTEXT.md and ADR 0047 name this the Change Tray; the glossary rejects
   // ad-hoc synonyms.
