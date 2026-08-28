@@ -5,6 +5,7 @@ import { labelForRelation } from '../domain/schema/relations'
 import { GLYPH_GEOMETRY, glyphForKind } from './kindGlyphs'
 import { computeTreeLayout, displayLabel, type TreeCrossLink } from './treeLayout'
 import type { RelationType } from '../domain/schema/relations'
+import { edgeKey, isTracing, traceEvidence } from './evidenceTrace'
 import {
   applyTreeAction,
   visibleTreeRows,
@@ -26,6 +27,11 @@ import {
  * and keyboard traversal, and deliberately no drag-to-reparent. A drag moves
  * the view and never an item, because restructuring a person's knowledge is a
  * proposed action they review, not a gesture they can make by accident.
+ *
+ * ADR 0045 is the signature interaction: selecting an item softens everything
+ * unrelated and illuminates its complete provenance and evidence path
+ * (`evidenceTrace.ts`). Selection is one path for pointer and keyboard alike,
+ * so the illumination follows both without a separate code path for either.
  */
 export interface GardenTreeProps {
   readonly index: GardenIndex
@@ -110,6 +116,22 @@ export function GardenTree({
     () => describeCrossLinksByItem(layout.crossLinks),
     [layout.crossLinks],
   )
+
+  /**
+   * ADR 0045: selecting an item illuminates its complete provenance and
+   * evidence path and softens everything else. Recomputed from `selectedId`
+   * alone, so choosing a different item clears the previous illumination for
+   * free -- there is no separate "illuminated" state to forget to reset.
+   *
+   * `tracing` is not "something is selected": a Root or a bare Branch is a
+   * legitimate selection with nothing upstream of it, and softening the whole
+   * Tree for that would read as broken rather than quiet -- caught in a
+   * real-browser check during development.
+   */
+  const trace = useMemo(() => traceEvidence(index, selectedId), [index, selectedId])
+  const tracing = isTracing(trace)
+  const isLit = (id: string) =>
+    id === selectedId || trace.evidencePathIds.has(id) || trace.contradictingIds.has(id)
 
   const [viewport, setViewport] = useState<Viewport>(AT_REST)
   const [keyboardId, setKeyboardId] = useState<string | undefined>(undefined)
@@ -248,7 +270,18 @@ export function GardenTree({
       >
         <g className="garden-tree__links" aria-hidden="true">
           {layout.links.map((link) => (
-            <path key={`${link.sourceId}->${link.targetId}`} d={link.path} />
+            <path
+              key={`${link.sourceId}->${link.targetId}`}
+              // Softened once anything is illuminated, unless the limb touches a
+              // lit node -- otherwise a glowing node would hang off a line that
+              // read as unrelated (ADR 0045).
+              className={
+                tracing && !isLit(link.sourceId) && !isLit(link.targetId)
+                  ? 'garden-tree__link--dimmed'
+                  : undefined
+              }
+              d={link.path}
+            />
           ))}
         </g>
 
@@ -256,22 +289,32 @@ export function GardenTree({
           Cross-links: relationships outside an item's primary placement. Drawing
           them keeps the Tree a legible one-parent projection while the graph
           underneath stays truthful (ADR 0008). Contradicts is dashed mulberry
-          (ADR 0045); the illumination that makes tracing a signature interaction
-          is ticket 09.
+          (ADR 0045). A selection illuminates the edges `traceEvidence` walked
+          and softens the rest; the relationships themselves are conveyed to
+          assistive technology through each node's accessible name below, since
+          this whole group is decorative.
         */}
         <g className="garden-tree__cross-links" aria-hidden="true">
-          {layout.crossLinks.map((link) => (
-            <path
-              key={`${link.type}:${link.sourceId}->${link.targetId}`}
-              // Kebab-cased so the stylesheet is not coupled to identifier spelling.
-              className={`garden-tree__cross-link garden-tree__cross-link--${link.type.replace(
-                /_/g,
-                '-',
-              )}`}
-              data-relation={link.type}
-              d={link.path}
-            />
-          ))}
+          {layout.crossLinks.map((link) => {
+            // The same key `evidenceTrace.ts` uses for `litEdges`, imported
+            // rather than re-spelled here, so the two cannot silently drift.
+            const key = edgeKey(link)
+            return (
+              <path
+                key={key}
+                // Kebab-cased so the stylesheet is not coupled to identifier spelling.
+                className={[
+                  'garden-tree__cross-link',
+                  `garden-tree__cross-link--${link.type.replace(/_/g, '-')}`,
+                  tracing && !trace.litEdges.has(key) && 'garden-tree__cross-link--dimmed',
+                ]
+                  .filter(Boolean)
+                  .join(' ')}
+                data-relation={link.type}
+                d={link.path}
+              />
+            )
+          })}
         </g>
 
         {layout.nodes.map((node) => {
@@ -280,6 +323,11 @@ export function GardenTree({
           const glyph = glyphForKind(node.kind)
           const crossLinks = crossLinksByItem.get(node.id)
           const diagnosed = diagnosedIds.has(node.id)
+          const onEvidencePath = !selected && trace.evidencePathIds.has(node.id)
+          const contradictsSelection = trace.contradictingIds.has(node.id)
+          // Reuses `isLit` rather than re-deriving the same fact a second way,
+          // so "dimmed" and "lit" cannot silently disagree with each other.
+          const dimmed = tracing && !isLit(node.id)
 
           return (
             <g
@@ -289,6 +337,7 @@ export function GardenTree({
                 selected && 'garden-tree__node--selected',
                 diagnosed && 'garden-tree__node--diagnosed',
                 node.dormant && 'garden-tree__node--dormant',
+                dimmed && 'garden-tree__node--dimmed',
               ]
                 .filter(Boolean)
                 .join(' ')}
@@ -302,9 +351,15 @@ export function GardenTree({
               // Marked rather than hidden: a Diagnostic is something to fix, not a
               // reason to make an item disappear (ADR 0052).
               aria-invalid={diagnosed || undefined}
-              // ADR 0031: dormancy is stated, not left to the drawing.
+              // ADR 0031: dormancy is stated, not left to the drawing. The
+              // evidence path and a Contradicts relationship are stated here
+              // too (ticket 09) -- softening and illumination are a visual
+              // treatment, and this is how the same fact reaches assistive
+              // technology (ADR 0045).
               aria-label={`${labelForKind(node.kind)}: ${node.title}${
                 node.dormant ? ', dormant' : ''
+              }${onEvidencePath ? ', on the evidence path' : ''}${
+                contradictsSelection ? ', contradicts the selection' : ''
               }`}
               aria-describedby={crossLinks ? `${node.id}-cross-links` : undefined}
               data-node-id={node.id}
