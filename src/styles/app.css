@@ -300,10 +300,16 @@ body {
   stroke: var(--bark);
   stroke-width: 2;
   stroke-opacity: 0.5;
+  /* On the base rule, not only `--dimmed`, so a limb fades back in when a
+     selection clears exactly as smoothly as it faded out (ADR 0045). */
+  transition: opacity 120ms ease-out;
 }
 
 .garden-tree__node {
   cursor: pointer;
+  /* On the base rule, not only `--dimmed`, so a node fades back in when a
+     selection clears exactly as smoothly as it faded out (ADR 0045). */
+  transition: opacity 120ms ease-out;
 }
 
 /*
@@ -316,6 +322,8 @@ body {
   stroke-width: 1.5;
   stroke-dasharray: 5 5;
   stroke-opacity: 0.85;
+  /* On the base rule so illumination fades both in and out (ADR 0045). */
+  transition: opacity 120ms ease-out;
 }
 
 .garden-tree__cross-link--contradicts {
@@ -342,6 +350,18 @@ body {
 .garden-tree__cross-link--relates-to {
   stroke: var(--lichen);
   stroke-dasharray: 5 5;
+}
+
+/*
+ * ADR 0045: selecting an item softens everything unrelated so its provenance
+ * and evidence path reads against a quiet Tree. Opacity alone, the same
+ * carrier ticket 08 uses for a Dormant Branch -- shape, colour, and dash
+ * pattern all stay exactly what they were, so nothing here is a second way of
+ * saying what a node already says.
+ */
+.garden-tree__link--dimmed,
+.garden-tree__cross-link--dimmed {
+  opacity: 0.15;
 }
 
 /*
@@ -432,6 +452,28 @@ body {
  */
 .garden-tree__node--dormant:focus-visible,
 .garden-tree__node--selected.garden-tree__node--dormant {
+  opacity: 1;
+}
+
+/*
+ * ADR 0045: softened further than a Dormant Branch recedes, because dormancy
+ * and "unrelated to what is selected" are different facts and a person should
+ * be able to tell them apart at a glance. A dimmed node is still focusable and
+ * still fully opaque the moment it receives focus, the same guarantee ticket
+ * 08 makes for a Dormant Branch.
+ */
+.garden-tree__node--dimmed {
+  opacity: 0.2;
+}
+
+/*
+ * Focus restores full opacity for keyboard navigation; hover does the same
+ * for a pointer, since a mouse has no equivalent to landing on a node the way
+ * Tab does. Without this a dimmed label sits under a pointer at the same low
+ * contrast it has everywhere else, with no way to preview it before clicking.
+ */
+.garden-tree__node--dimmed:focus-visible,
+.garden-tree__node--dimmed:hover {
   opacity: 1;
 }
 

@@ -1164,3 +1164,196 @@ describe('navigating the Tree', () => {
     expect(container.querySelector('[draggable="true"]')).toBeNull()
   })
 })
+
+/**
+ * ADR 0045: the signature interaction. Selecting an item softens everything
+ * unrelated and illuminates its complete provenance and evidence path, and
+ * Contradicts reads differently from support. Criterion by criterion against
+ * ticket 09.
+ */
+describe('evidence tracing', () => {
+  const ROOT_ID = 'root_01HQ8X2K3M4N5P6Q7R8S9T0R1W'
+  const ROOT_2_ID = 'root_01HQ8X2K3M4N5P6Q7R8S9T0R2W'
+  const CLAIM_ID = 'claim_leaf_01HQ8X2K3M4N5P6Q7R8S9T0C1W'
+  const CLAIM_2_ID = 'claim_leaf_01HQ8X2K3M4N5P6Q7R8S9T0C2W'
+  const BRANCH_ID = 'branch_01HQ8X2K3M4N5P6Q7R8S9T0B1W'
+  const QUESTION_ID = 'question_leaf_01HQ8X2K3M4N5P6Q7R8S9T0Q1W'
+  const HARVEST_ID = 'harvest_01HQ8X2K3M4N5P6Q7R8S9T0H1W'
+
+  const front = (lines: string[]) =>
+    ['---', 'schema_version: 1', ...lines, 'created_at: 2026-08-01T10:00:00Z',
+      'updated_at: 2026-08-01T10:00:00Z', '---', '', 'A body.', ''].join('\n')
+
+  async function renderContradiction() {
+    const index = await buildGardenIndex([
+      { path: ['branches', 'b.md'], text: front([`id: ${BRANCH_ID}`, 'kind: branch', 'title: Topic', 'state: active']) },
+      { path: ['roots', 'r.md'], text: front([`id: ${ROOT_ID}`, 'kind: root', 'title: For the first', 'captured_at: 2026-08-01T09:00:00Z', 'content_hash: sha256:x']) },
+      { path: ['roots', 'r2.md'], text: front([`id: ${ROOT_2_ID}`, 'kind: root', 'title: For the second', 'captured_at: 2026-08-01T09:00:00Z', 'content_hash: sha256:y']) },
+      { path: ['leaves', 'c1.md'], text: front([`id: ${CLAIM_ID}`, 'kind: claim_leaf', 'title: Costs fall', `parent_id: ${BRANCH_ID}`, 'supported_by:', `  - ${ROOT_ID}`, 'relations:', '  - type: contradicts', `    target: ${CLAIM_2_ID}`]) },
+      { path: ['leaves', 'c2.md'], text: front([`id: ${CLAIM_2_ID}`, 'kind: claim_leaf', 'title: Costs rise', `parent_id: ${BRANCH_ID}`, 'supported_by:', `  - ${ROOT_2_ID}`]) },
+    ])
+    expect(index.diagnostics, JSON.stringify(index.diagnostics)).toEqual([])
+    return render(<Workspace garden={{ repositoryName: 'g', index, fileSystem: emptyRepository() }} />)
+  }
+
+  it('illuminates the Root that supports the selected Claim', async () => {
+    await renderContradiction()
+
+    await userEvent.click(screen.getByRole('treeitem', { name: /Costs fall/ }))
+
+    expect(screen.getByRole('treeitem', { name: /For the first/ })).toHaveAccessibleName(
+      /on the evidence path/,
+    )
+  })
+
+  it('marks the Contradicts side distinctly, not as a supporting item', async () => {
+    await renderContradiction()
+
+    await userEvent.click(screen.getByRole('treeitem', { name: /Costs fall/ }))
+
+    const other = screen.getByRole('treeitem', { name: /Costs rise/ })
+    expect(other).toHaveAccessibleName(/contradicts the selection/)
+    expect(other).not.toHaveAccessibleName(/on the evidence path/)
+  })
+
+  // The contradicting Claim's own Root is not evidence for the selection.
+  it('does not illuminate the contradicting Claim’s own Root', async () => {
+    await renderContradiction()
+
+    await userEvent.click(screen.getByRole('treeitem', { name: /Costs fall/ }))
+
+    expect(screen.getByRole('treeitem', { name: /For the second/ })).not.toHaveAccessibleName(
+      /on the evidence path|contradicts the selection/,
+    )
+  })
+
+  it('softens a node unrelated to the selection', async () => {
+    await renderContradiction()
+
+    await userEvent.click(screen.getByRole('treeitem', { name: /Costs fall/ }))
+
+    expect(screen.getByRole('treeitem', { name: /^Branch: Topic/ }).getAttribute('class')).toContain(
+      'garden-tree__node--dimmed',
+    )
+  })
+
+  it('leaves nothing softened before anything is selected', async () => {
+    const { container } = await renderContradiction()
+
+    expect(container.querySelector('.garden-tree__node--dimmed')).toBeNull()
+  })
+
+  // The bug a real-browser check caught: `tracing` was true for any
+  // selection, so choosing a Branch with no evidentiary relationship of its
+  // own dimmed the whole Tree for no reason a person could see.
+  it('softens nothing when the selection has no evidence path or Contradicts relationship', async () => {
+    const { container } = await renderContradiction()
+
+    await userEvent.click(screen.getByRole('treeitem', { name: /^Branch: Topic/ }))
+
+    expect(container.querySelector('.garden-tree__node--dimmed')).toBeNull()
+  })
+
+  it('leaves a lit cross-link undimmed', async () => {
+    const { container } = await renderContradiction()
+
+    await userEvent.click(screen.getByRole('treeitem', { name: /Costs fall/ }))
+
+    const supports = container.querySelector('[data-relation="supports"]')
+    expect(supports).not.toHaveClass('garden-tree__cross-link--dimmed')
+  })
+
+  // The other Claim's own evidence is not part of this selection's path, so
+  // its Supports Cross-link softens along with everything else unrelated.
+  it('dims a cross-link that is not part of the illuminated path', async () => {
+    const { container } = await renderContradiction()
+
+    await userEvent.click(screen.getByRole('treeitem', { name: /Costs fall/ }))
+
+    const supportsLinks = [...container.querySelectorAll('[data-relation="supports"]')]
+    const dimmed = supportsLinks.filter((link) => link.classList.contains('garden-tree__cross-link--dimmed'))
+    expect(dimmed).toHaveLength(1)
+  })
+
+  it('leaves the Contradicts cross-link undimmed, since it is part of what is shown', async () => {
+    const { container } = await renderContradiction()
+
+    await userEvent.click(screen.getByRole('treeitem', { name: /Costs fall/ }))
+
+    expect(container.querySelector('[data-relation="contradicts"]')).not.toHaveClass(
+      'garden-tree__cross-link--dimmed',
+    )
+  })
+
+  it('clears the previous illumination when a different item is selected', async () => {
+    await renderContradiction()
+    await userEvent.click(screen.getByRole('treeitem', { name: /Costs fall/ }))
+    expect(screen.getByRole('treeitem', { name: /For the first/ })).toHaveAccessibleName(
+      /on the evidence path/,
+    )
+
+    await userEvent.click(screen.getByRole('treeitem', { name: /^Branch: Topic/ }))
+
+    expect(screen.getByRole('treeitem', { name: /For the first/ })).not.toHaveAccessibleName(
+      /on the evidence path/,
+    )
+  })
+
+  it('opens the reading panel for the selection as the illumination appears', async () => {
+    await renderContradiction()
+
+    await userEvent.click(screen.getByRole('treeitem', { name: /Costs fall/ }))
+
+    expect(screen.getByRole('treeitem', { name: /For the first/ })).toHaveAccessibleName(
+      /on the evidence path/,
+    )
+    expect(screen.getByRole('heading', { level: 2, name: 'Costs fall' })).toBeInTheDocument()
+  })
+
+  // Selection has one code path for pointer and keyboard alike (ADR 0042), so
+  // illumination follows keyboard selection without a separate implementation.
+  it('illuminates from a keyboard selection, not only a pointer one', async () => {
+    await renderContradiction()
+    screen.getByRole('treeitem', { name: /Costs fall/ }).focus()
+
+    await userEvent.keyboard('{Enter}')
+
+    expect(screen.getByRole('treeitem', { name: /For the first/ })).toHaveAccessibleName(
+      /on the evidence path/,
+    )
+  })
+
+  // Ticket 09's second criterion: a Root two hops away, reached only through
+  // the Harvest that answers a Question, still lights up.
+  it('reaches a Root through the Harvest that answers a Question', async () => {
+    const HARVEST_BODY = [
+      '## Question', 'q', '## Synthesis', 's', '## Evidence', 'e',
+      '## Contradictions and uncertainty', 'c', '## Open questions', 'o',
+    ].join('\n\n')
+    const index = await buildGardenIndex([
+      { path: ['branches', 'b.md'], text: front([`id: ${BRANCH_ID}`, 'kind: branch', 'title: Topic', 'state: active']) },
+      { path: ['roots', 'r.md'], text: front([`id: ${ROOT_ID}`, 'kind: root', 'title: Evidence', 'captured_at: 2026-08-01T09:00:00Z', 'content_hash: sha256:x']) },
+      { path: ['leaves', 'q.md'], text: front([`id: ${QUESTION_ID}`, 'kind: question_leaf', 'title: A question', `parent_id: ${BRANCH_ID}`]) },
+      {
+        path: ['harvests', 'h.md'],
+        text: [
+          '---', 'schema_version: 1', `id: ${HARVEST_ID}`, 'kind: harvest', 'title: A synthesis',
+          `parent_id: ${BRANCH_ID}`, 'supported_by:', `  - ${ROOT_ID}`,
+          'relations:', '  - type: answers', `    target: ${QUESTION_ID}`,
+          'created_at: 2026-08-01T10:00:00Z', 'updated_at: 2026-08-01T10:00:00Z', '---', '', HARVEST_BODY, '',
+        ].join('\n'),
+      },
+    ])
+    expect(index.diagnostics, JSON.stringify(index.diagnostics)).toEqual([])
+    render(<Workspace garden={{ repositoryName: 'g', index, fileSystem: emptyRepository() }} />)
+
+    await userEvent.click(screen.getByRole('treeitem', { name: /A question/ }))
+
+    expect(screen.getByRole('treeitem', { name: /A synthesis/ })).toHaveAccessibleName(
+      /on the evidence path/,
+    )
+    expect(screen.getByRole('treeitem', { name: /^Root: Evidence/ })).toHaveAccessibleName(
+      /on the evidence path/,
+    )
+  })
+})
