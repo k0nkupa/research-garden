@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { editItem, type EditItemResult } from '../garden/editItem'
 import {
   activityForEditItem,
@@ -29,10 +29,18 @@ import { revealItem, UNFOCUSED, type TreeViewState } from './treeView'
  * already do: neither is a permanent fixture, so neither should take space
  * from the Tree that ADR 0019 makes primary.
  *
- * `garden` is held as local state, seeded from the prop, because a successful
- * edit or Undo changes files on disk and the Tree, the panel, and Diagnostics
- * all need to reflect that -- so this is where the Garden is reopened after
- * either one succeeds (ADR 0055: a write is not trusted until it is reread).
+ * `garden` is held as local state, seeded from the prop, so it can be replaced
+ * with a freshly rescanned one without unmounting anything below -- the Tree's
+ * pan and zoom, the person's open Edit draft, and which panel is showing all
+ * survive a rescan exactly because they never re-render from scratch.
+ *
+ * ADR 0053 fixes when a rescan happens: window focus, an explicit Refresh, and
+ * immediately before a mutation -- never on a timer. `rescanGarden` is the one
+ * function that does it, so every boundary calls the same path. A rescan that
+ * fails (permission lapsed, the folder is gone) says so in a dismissable
+ * notice rather than disturbing what is already on screen; a write's own
+ * result, reported separately, is still the authority on whether that write
+ * happened.
  */
 export interface WorkspaceProps {
   readonly garden: OpenedGarden
@@ -54,6 +62,15 @@ export function Workspace({ garden: initialGarden, now, entropy }: WorkspaceProp
   const [lastEdit, setLastEdit] = useState<{ itemId: string; snapshotId: string } | undefined>(
     undefined,
   )
+  const [rescanning, setRescanning] = useState(false)
+  /** Set only when a rescan itself failed; a write's own outcome is reported separately. */
+  const [rescanNotice, setRescanNotice] = useState<string | undefined>(undefined)
+  /**
+   * How many rescans are in flight, so the busy state clears only once every
+   * overlapping one has finished. Each rescan still runs its own independent
+   * scan rather than sharing another's -- see `rescanGarden`.
+   */
+  const inFlightRescans = useRef(0)
 
   const clock = useCallback(() => (now ?? nowAsCanonicalTimestamp)(), [now])
   const nextActivityId = useMemo(() => createUlidFactory(entropy ?? browserEntropy), [entropy])
@@ -83,23 +100,71 @@ export function Workspace({ garden: initialGarden, now, entropy }: WorkspaceProp
     setView((current) => revealItem(garden.index, current, id))
   }
 
-  /** Reopens the Garden after a write, so the Tree and index reflect it (ADR 0055). */
-  const refreshGarden = useCallback(async () => {
-    const reopened = await openGarden(garden.fileSystem)
-    // A write that was itself verified (ADR 0055) succeeding while the
-    // subsequent reopen fails is a rarer, secondary failure -- most likely
-    // permission lapsing in the moment between the two. The Tree is simply
-    // left showing the pre-write state rather than a half-updated one; the
-    // write's own result (already returned to the caller) still reports what
-    // actually happened on disk.
-    if (reopened.kind === 'opened') setGarden(reopened.garden)
+  /**
+   * Rescans the Garden Repository (ADR 0053, ticket 13): reopens it and swaps
+   * the local `garden` state for the result, without touching selection, the
+   * Tree's view, or an in-progress Edit draft. Used for every boundary --
+   * window focus, the Refresh control, immediately before Save, and (as it
+   * always has) reopening after a write succeeds.
+   *
+   * Every call runs its own scan rather than joining another's already in
+   * flight. Sharing one would be cheaper, but a call made *because* something
+   * is about to depend on current files -- the reread after a write, the
+   * check right before one -- would then risk being handed a scan that
+   * started earlier and no longer reflects what it was asked for. There is
+   * nothing here to coalesce that is worth that risk: `openGarden` is a
+   * handful of local file reads.
+   *
+   * A rescan that itself fails -- permission lapsed, the folder is gone --
+   * surfaces in `rescanNotice` and otherwise changes nothing: the Tree is left
+   * showing what it last knew, exactly as an interrupted post-write reopen
+   * already did, because a write's own result (returned separately) is still
+   * the authority on whether that write happened.
+   */
+  const rescanGarden = useCallback(async (): Promise<OpenedGarden | undefined> => {
+    inFlightRescans.current += 1
+    setRescanning(true)
+    try {
+      const reopened = await openGarden(garden.fileSystem)
+      if (reopened.kind === 'opened') {
+        setRescanNotice(undefined)
+        setGarden(reopened.garden)
+        return reopened.garden
+      }
+      setRescanNotice(
+        reopened.kind === 'permission-required'
+          ? 'Permission for this Garden Repository was not available, so it could not be rescanned.'
+          : reopened.message,
+      )
+      return undefined
+    } finally {
+      inFlightRescans.current -= 1
+      if (inFlightRescans.current === 0) setRescanning(false)
+    }
   }, [garden.fileSystem])
+
+  // ADR 0053: rescanned when the window regains focus. Not `visibilitychange`:
+  // the criterion is specifically focus, and App.tsx already uses the same
+  // `window`-listener idiom for `resize`/`online`/`offline`.
+  useEffect(() => {
+    const onFocus = () => void rescanGarden()
+    window.addEventListener('focus', onFocus)
+    return () => window.removeEventListener('focus', onFocus)
+  }, [rescanGarden])
 
   const saveEdit = useCallback(
     async (itemId: string, baseText: string, newBody: string): Promise<EditItemResult> => {
+      // ADR 0053: rescanned immediately before the mutation, so `editItem`'s
+      // own Diagnostic and Root-evidence checks see the Garden as it is now --
+      // not as it was when this item was last on screen. A dangling reference
+      // introduced by an unrelated external change is exactly the kind of
+      // thing this item's own file content would never reveal on its own.
+      const rescanned = await rescanGarden()
+      const active = rescanned ?? garden
+
       const result = await editItem(
-        garden.fileSystem,
-        garden.index,
+        active.fileSystem,
+        active.index,
         { itemId, baseText, newBody },
         { now, entropy },
       )
@@ -110,17 +175,22 @@ export function Workspace({ garden: initialGarden, now, entropy }: WorkspaceProp
         // A no-op save (identical body) writes nothing and produces no Undo
         // Snapshot, so there is nothing for the Undo button to offer.
         setLastEdit(result.snapshotId ? { itemId, snapshotId: result.snapshotId } : undefined)
-        await refreshGarden()
+        await rescanGarden()
       }
 
       return result
     },
-    [clock, entropy, garden.fileSystem, garden.index, nextActivityId, now, refreshGarden],
+    [clock, entropy, garden, nextActivityId, now, rescanGarden],
   )
 
   const undoLastEdit = useCallback(async (): Promise<UndoChangeResult | undefined> => {
     if (!lastEdit) return undefined
 
+    // No pre-rescan here, unlike `saveEdit`: `undoChange` takes no `index` and
+    // makes its own current-files check directly against the target file's
+    // hash (ADR 0027), so a rescan first would refresh the Tree a moment
+    // early and change nothing about what Undo itself is protected against.
+    // The rescan after a successful restore, below, is what shows the result.
     const result = await undoChange(garden.fileSystem, lastEdit, { now, entropy })
 
     setActivity((log) =>
@@ -129,11 +199,11 @@ export function Workspace({ garden: initialGarden, now, entropy }: WorkspaceProp
 
     if (result.kind === 'restored') {
       setLastEdit(undefined)
-      await refreshGarden()
+      await rescanGarden()
     }
 
     return result
-  }, [clock, entropy, garden.fileSystem, lastEdit, nextActivityId, now, refreshGarden])
+  }, [clock, entropy, garden.fileSystem, lastEdit, nextActivityId, now, rescanGarden])
 
   return (
     <main className="workspace">
@@ -172,7 +242,23 @@ export function Workspace({ garden: initialGarden, now, entropy }: WorkspaceProp
             {diagnostics.length} {diagnostics.length === 1 ? 'Diagnostic' : 'Diagnostics'}
           </button>
         )}
+
+        {/* ADR 0053: rescans on demand, on top of window focus and before a mutation. */}
+        <button
+          type="button"
+          className="workspace__panel-toggle workspace__refresh"
+          onClick={() => void rescanGarden()}
+          disabled={rescanning}
+        >
+          {rescanning ? 'Rescanning…' : 'Refresh'}
+        </button>
       </div>
+
+      {rescanNotice && (
+        <p className="notice notice--failure" role="alert">
+          {rescanNotice}
+        </p>
+      )}
 
       <div className="workspace__panes">
         <div className="workspace__tree">

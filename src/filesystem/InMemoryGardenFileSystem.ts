@@ -44,6 +44,11 @@ export class InMemoryGardenFileSystem implements GardenFileSystem {
     )
   }
 
+  /** Test affordance: simulates a file being deleted outside Research Garden (ticket 13). */
+  remove(path: GardenPath): void {
+    this.#files.delete(formatGardenPath(path))
+  }
+
   async permission(): Promise<GardenPermissionState> {
     return this.#permission
   }

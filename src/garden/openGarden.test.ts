@@ -203,3 +203,117 @@ describe('when the folder cannot be read at all', () => {
     await expect(openGarden(broken)).resolves.toMatchObject({ kind: 'failed' })
   })
 })
+
+/**
+ * ADR 0053: Research Garden never polls, so a rescan is nothing more than
+ * calling `openGarden` again on the same folder at an explicit boundary
+ * (window focus, Refresh, or immediately before a mutation). These tests
+ * exercise that reuse directly, at the seam that actually does the scanning,
+ * rather than through the human interface that merely decides when to call it
+ * (`Workspace.rescanGarden`, tested separately for the timing itself).
+ */
+describe('rescanning at consistency boundaries (ticket 13)', () => {
+  const OPTIMISERS = 'branch_01HQ8X2K3M4N5P6Q7R8S9T0V2X'
+  const optimisersFile = `---
+schema_version: 1
+id: ${OPTIMISERS}
+kind: branch
+title: Optimisers
+state: active
+created_at: 2026-08-01T10:00:00Z
+updated_at: 2026-08-01T10:00:00Z
+---
+
+What I am collecting about optimisers.
+`
+
+  it('reflects an edit made outside Research Garden at the next rescan', async () => {
+    const fileSystem = gardenWith({ 'branches/attention.md': attentionFile })
+    await openGarden(fileSystem)
+
+    await fileSystem.write(
+      ['branches', 'attention.md'],
+      attentionFile.replace('Attention mechanisms', 'Attention mechanisms, revised elsewhere'),
+    )
+
+    const rescanned = expectOpened(await openGarden(fileSystem))
+    expect(rescanned.index.items.get(ATTENTION)?.item.title).toBe(
+      'Attention mechanisms, revised elsewhere',
+    )
+  })
+
+  it('reflects a file added outside Research Garden at the next rescan', async () => {
+    const fileSystem = gardenWith({ 'branches/attention.md': attentionFile })
+    const before = expectOpened(await openGarden(fileSystem))
+    expect(before.index.items.size).toBe(1)
+
+    await fileSystem.write(['branches', 'optimisers.md'], optimisersFile)
+
+    const rescanned = expectOpened(await openGarden(fileSystem))
+    expect(rescanned.index.items.size).toBe(2)
+    expect(rescanned.index.items.get(OPTIMISERS)?.item.title).toBe('Optimisers')
+  })
+
+  it('reflects a file deleted outside Research Garden at the next rescan', async () => {
+    const fileSystem = gardenWith({
+      'branches/attention.md': attentionFile,
+      'branches/optimisers.md': optimisersFile,
+    })
+    const before = expectOpened(await openGarden(fileSystem))
+    expect(before.index.items.size).toBe(2)
+
+    fileSystem.remove(['branches', 'optimisers.md'])
+
+    const rescanned = expectOpened(await openGarden(fileSystem))
+    expect(rescanned.index.items.size).toBe(1)
+    expect(rescanned.index.items.has(OPTIMISERS)).toBe(false)
+  })
+
+  it('changes the Garden Revision when a rescan finds different canonical content', async () => {
+    const fileSystem = gardenWith({ 'branches/attention.md': attentionFile })
+    const before = expectOpened(await openGarden(fileSystem))
+
+    await fileSystem.write(['branches', 'optimisers.md'], optimisersFile)
+
+    const after = expectOpened(await openGarden(fileSystem))
+    expect(after.index.revision).not.toBe(before.index.revision)
+  })
+
+  it('leaves the Garden Revision unchanged when a rescan finds nothing different', async () => {
+    const fileSystem = gardenWith({ 'branches/attention.md': attentionFile })
+    const before = expectOpened(await openGarden(fileSystem))
+
+    const rescanned = expectOpened(await openGarden(fileSystem))
+    expect(rescanned.index.revision).toBe(before.index.revision)
+  })
+
+  // ADR 0052: a rescan that finds a file has gone bad reports it as a
+  // Diagnostic. The rest of the Garden -- files a rescan had no reason to
+  // touch -- must load exactly as before, so newly invalid content in one
+  // file never disrupts the rest of what a person is doing.
+  it('produces a Diagnostic for content that turned invalid outside Research Garden, without disturbing an unrelated item', async () => {
+    const fileSystem = gardenWith({
+      'branches/attention.md': attentionFile,
+      'branches/optimisers.md': optimisersFile,
+    })
+    const before = expectOpened(await openGarden(fileSystem))
+    expect(before.index.diagnostics).toEqual([])
+
+    // A hand edit outside Research Garden that breaks the schema (kind is
+    // rewritten to something the schema does not recognize).
+    await fileSystem.write(
+      ['branches', 'optimisers.md'],
+      optimisersFile.replace('kind: branch', 'kind: not-a-real-kind'),
+    )
+
+    const rescanned = expectOpened(await openGarden(fileSystem))
+    expect(rescanned.index.diagnostics).toHaveLength(1)
+    expect(rescanned.index.diagnostics[0]?.itemId).toBe(OPTIMISERS)
+    expect(rescanned.index.items.has(OPTIMISERS)).toBe(false)
+
+    // The unrelated item is untouched: still present, still valid, still
+    // exactly what it was.
+    expect(rescanned.index.items.get(ATTENTION)?.item.title).toBe('Attention mechanisms')
+    expect(rescanned.index.diagnostics.some((d) => d.itemId === ATTENTION)).toBe(false)
+  })
+})

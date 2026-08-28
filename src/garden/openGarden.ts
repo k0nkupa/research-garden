@@ -45,6 +45,12 @@ function isMarkdown(path: GardenPath): boolean {
  * never scanned as knowledge: Pending Changes, Undo Snapshots, and the Index
  * Cache are operational records and do not become canonical merely by living
  * beside it (ADR 0026, ADR 0050).
+ *
+ * This is also the entire rescan operation (ADR 0053, ticket 13): a rescan is
+ * calling this again on the same folder, at window focus, on Refresh, or
+ * immediately before a mutation -- never on a timer. There is deliberately no
+ * separate "rescan" function; one scanning path is what keeps the first open
+ * and every later rescan from being able to drift apart.
  */
 export async function openGarden(fileSystem: GardenFileSystem): Promise<OpenGardenResult> {
   const repositoryName = fileSystem.repositoryName

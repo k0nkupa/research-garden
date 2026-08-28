@@ -358,8 +358,13 @@ describe('muted text ink stays above the readable floor (ADR 0044)', () => {
   const MINIMUM_INK_MIX = 70
   const MINIMUM_TEXT_OPACITY = 0.7
 
+  // The negative lookbehind keeps this to the text-ink properties themselves:
+  // without it, `border-color:` and `outline-color:` also end in "color:" and
+  // would be misread as muted text, which is a decorative border's business
+  // and no one's readability -- ticket 13 hit this directly with a bark-tinted
+  // `border-color` on the Refresh control.
   const inkMixes = () => [
-    ...stylesheet.matchAll(/(?:color|fill):\s*color-mix\(in srgb, var\(--bark\) (\d+)%/g),
+    ...stylesheet.matchAll(/(?<![\w-])(?:color|fill):\s*color-mix\(in srgb, var\(--bark\) (\d+)%/g),
   ]
 
   it('never mixes text ink below the floor', () => {

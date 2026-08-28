@@ -771,6 +771,29 @@ body {
   outline-offset: 2px;
 }
 
+/*
+ * Refresh (ADR 0053, ticket 13) shares `.workspace__panel-toggle`'s pill
+ * geometry in the markup (both classes on one element) rather than repeating
+ * it here. It is a plain utility action, not a state toggle like Diagnostics
+ * or Activity, so only the colour -- neutral bark rather than either of
+ * theirs -- and its push to the far end of the bar are its own.
+ */
+.workspace__refresh {
+  border-color: color-mix(in srgb, var(--bark) 30%, transparent);
+  background: var(--canvas);
+  color: color-mix(in srgb, var(--bark) 80%, transparent);
+  margin-left: auto;
+}
+
+.workspace__refresh:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--lichen) 20%, var(--canvas));
+}
+
+.workspace__refresh:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
 .garden-tree__diagnostic-mark {
   fill: var(--mulberry);
   stroke: var(--canvas);
