@@ -24,6 +24,13 @@ export interface CapabilityEnvironment {
 export interface Capabilities {
   readonly localFolderAccess: boolean
   readonly webMcp: boolean
+  /**
+   * Live network connectivity (`navigator.onLine`). Unlike the other two
+   * capabilities this can change mid-session (ADR 0072: the human interface
+   * keeps working offline; agent workflows do not), so callers re-derive it on
+   * `online`/`offline` events rather than only once at load.
+   */
+  readonly online: boolean
 }
 
 export interface Viewport {
@@ -38,8 +45,19 @@ export interface Viewport {
  */
 export type MissingCapability = 'local-folder-access'
 
+/**
+ * Whether ChatGPT can currently reach this Garden through WebMCP.
+ *
+ * `'unsupported'` and `'offline'` are kept distinct rather than collapsed into
+ * one boolean because they call for different explanations: a browser without
+ * WebMCP will never gain it, while an offline browser regains it the moment
+ * connectivity returns. ADR 0072: the human interface keeps working offline,
+ * but browser-agent workflows require the host connection.
+ */
+export type AgentInterfaceStatus = 'available' | 'unsupported' | 'offline'
+
 export type Readiness =
-  | { readonly kind: 'ready'; readonly agentInterfaceAvailable: boolean }
+  | { readonly kind: 'ready'; readonly agentInterface: AgentInterfaceStatus }
   | { readonly kind: 'unsupported-viewport' }
   | { readonly kind: 'unsupported-browser'; readonly missing: MissingCapability }
 
@@ -54,10 +72,35 @@ function exposesAgentToolRegistry(navigator: unknown): boolean {
   return (navigator as { modelContext: unknown }).modelContext != null
 }
 
+/**
+ * `navigator.onLine` is well-supported in the target desktop Chromium
+ * browsers (ADR 0064), so an environment that omits it entirely (as bare test
+ * fixtures do) is read as online rather than penalized for not modelling a
+ * signal it was never trying to describe.
+ */
+function readOnline(navigator: unknown): boolean {
+  if (typeof navigator !== 'object' || navigator === null) return true
+  if (!('onLine' in navigator)) return true
+  return Boolean((navigator as { onLine: unknown }).onLine)
+}
+
+/**
+ * WebMCP presence and live connectivity are two independent gates on the same
+ * outcome (ADR 0059/ADR 0072), so this is written as the two guard clauses it
+ * actually is rather than a nested ternary — one condition to read at a time,
+ * in the order they are checked.
+ */
+function resolveAgentInterfaceStatus(capabilities: Capabilities): AgentInterfaceStatus {
+  if (!capabilities.webMcp) return 'unsupported'
+  if (!capabilities.online) return 'offline'
+  return 'available'
+}
+
 export function detectCapabilities(environment: CapabilityEnvironment): Capabilities {
   return {
     localFolderAccess: typeof environment.showDirectoryPicker === 'function',
     webMcp: exposesAgentToolRegistry(environment.navigator),
+    online: readOnline(environment.navigator),
   }
 }
 
@@ -79,5 +122,5 @@ export function resolveReadiness(capabilities: Capabilities, viewport: Viewport)
     return { kind: 'unsupported-browser', missing: 'local-folder-access' }
   }
 
-  return { kind: 'ready', agentInterfaceAvailable: capabilities.webMcp }
+  return { kind: 'ready', agentInterface: resolveAgentInterfaceStatus(capabilities) }
 }

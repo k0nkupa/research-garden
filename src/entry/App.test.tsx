@@ -17,10 +17,19 @@ function grantLocalFolderAccess() {
   })
 }
 
+function grantWebMcp() {
+  Object.defineProperty(navigator, 'modelContext', { value: {}, configurable: true })
+}
+
+function setOnLine(value: boolean) {
+  Object.defineProperty(navigator, 'onLine', { value, configurable: true })
+}
+
 afterEach(() => {
   Reflect.deleteProperty(window, 'showDirectoryPicker')
   Reflect.deleteProperty(navigator, 'modelContext')
   setViewport(1440, 900)
+  setOnLine(true)
 })
 
 describe('App', () => {
@@ -72,5 +81,28 @@ describe('App', () => {
     })
 
     expect(screen.getByRole('button', { name: /create garden/i })).toBeInTheDocument()
+  })
+
+  // ADR 0072: agent workflows require the host connection, and that can be
+  // lost or regained without a reload, so the shell must react live.
+  it('re-resolves the agent interface when connectivity is lost and regained', () => {
+    setViewport(1440, 900)
+    grantLocalFolderAccess()
+    grantWebMcp()
+
+    render(<App />)
+    expect(screen.queryByRole('status')).not.toBeInTheDocument()
+
+    act(() => {
+      setOnLine(false)
+      window.dispatchEvent(new Event('offline'))
+    })
+    expect(screen.getByRole('status')).toHaveTextContent(/offline/i)
+
+    act(() => {
+      setOnLine(true)
+      window.dispatchEvent(new Event('online'))
+    })
+    expect(screen.queryByRole('status')).not.toBeInTheDocument()
   })
 })

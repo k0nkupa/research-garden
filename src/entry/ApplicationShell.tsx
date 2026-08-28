@@ -1,6 +1,8 @@
+import type { ReactNode } from 'react'
 import {
   MINIMUM_WORKSPACE_HEIGHT,
   MINIMUM_WORKSPACE_WIDTH,
+  type AgentInterfaceStatus,
   type MissingCapability,
   type Readiness,
 } from '../capabilities/capabilities'
@@ -92,22 +94,50 @@ export function ApplicationShell({
           </p>
         )}
 
-        {!readiness.agentInterfaceAvailable && <AgentInterfaceUnavailable />}
+        {readiness.agentInterface !== 'available' && (
+          <AgentInterfaceUnavailable reason={readiness.agentInterface} />
+        )}
       </div>
     </main>
   )
 }
 
 /**
- * ADR 0059: WebMCP's absence is a notice, not a barrier. The complete human
- * interface remains usable; only agent workflows are unavailable.
+ * Every unavailable reason a status other than `'available'` can name, mirroring
+ * MISSING_CAPABILITY_HEADINGS below: an exhaustive map means a third reason
+ * added later fails to typecheck here instead of silently falling through an
+ * `if`/`else`.
  */
-function AgentInterfaceUnavailable() {
-  return (
-    <p className="notice" role="status">
+type AgentInterfaceUnavailableReason = Exclude<AgentInterfaceStatus, 'available'>
+
+/**
+ * ADR 0059/0072: neither an unsupported browser nor a lost connection is a
+ * barrier to the human interface — only to agent workflows, so this is a
+ * notice, not a blocking screen. The two reasons get different copy because
+ * they call for different next steps: "offline" resolves itself the moment
+ * connectivity returns, "unsupported" never will in this browser.
+ */
+const AGENT_INTERFACE_UNAVAILABLE_COPY: Record<AgentInterfaceUnavailableReason, ReactNode> = {
+  offline: (
+    <>
+      You are offline, so ChatGPT cannot connect to a Garden here right now. Everything else
+      works: you can create, open, read, and edit a Garden exactly as normal. Agent workflows
+      will resume once your connection returns.
+    </>
+  ),
+  unsupported: (
+    <>
       This browser does not support <strong>WebMCP</strong>, so ChatGPT cannot connect to a
       Garden here. Everything else works: you can create, open, read, and edit a Garden
       exactly as normal.
+    </>
+  ),
+}
+
+function AgentInterfaceUnavailable({ reason }: { readonly reason: AgentInterfaceUnavailableReason }) {
+  return (
+    <p className="notice" role="status">
+      {AGENT_INTERFACE_UNAVAILABLE_COPY[reason]}
     </p>
   )
 }
