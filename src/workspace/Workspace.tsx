@@ -10,6 +10,11 @@ import { diagnosticsForItem } from '../garden/mutationGuard'
 import type { OpenedGarden } from '../garden/openGarden'
 import { openGarden } from '../garden/openGarden'
 import { undoChange, type UndoChangeResult } from '../garden/undoChange'
+import {
+  exceedsPerformanceTarget,
+  PERFORMANCE_TARGET_ITEM_COUNT,
+  PERFORMANCE_TARGET_RELATIONSHIP_COUNT,
+} from '../domain/index/performanceTarget'
 import { nowAsCanonicalTimestamp } from '../domain/schema/canonicalTimestamp'
 import { browserEntropy, createUlidFactory, type UlidEntropy } from '../domain/schema/ulid'
 import { DiagnosticsPanel } from './DiagnosticsPanel'
@@ -78,6 +83,9 @@ export function Workspace({ garden: initialGarden, now, entropy }: WorkspaceProp
   const selected = selectedId === undefined ? undefined : garden.index.items.get(selectedId)
   const diagnostics = garden.index.diagnostics
   const undoableSelected = lastEdit !== undefined && selectedId === lastEdit.itemId
+  // ADR 0061 / ticket 24: a warning, never a limit -- everything below still
+  // opens and works regardless of what this says.
+  const performanceWarning = exceedsPerformanceTarget(garden.index)
 
   /** Items that loaded but carry a Garden Diagnostic, so the Tree can mark them. */
   const diagnosedIds = useMemo(
@@ -257,6 +265,15 @@ export function Workspace({ garden: initialGarden, now, entropy }: WorkspaceProp
       {rescanNotice && (
         <p className="notice notice--failure" role="alert">
           {rescanNotice}
+        </p>
+      )}
+
+      {performanceWarning && (
+        <p className="notice" role="status">
+          This Garden has grown past the size Research Garden is tested against (
+          {PERFORMANCE_TARGET_ITEM_COUNT.toLocaleString()} items,{' '}
+          {PERFORMANCE_TARGET_RELATIONSHIP_COUNT.toLocaleString()} relationships). Everything here
+          still works; some interactions may be slower than usual.
         </p>
       )}
 
