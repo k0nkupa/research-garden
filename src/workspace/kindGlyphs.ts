@@ -72,3 +72,34 @@ export const GLYPH_GEOMETRY: Record<GlyphShape, string> = {
   // for the open ring at a glance (ADR 0044).
   fruit: 'M0,-10 L9,-5 L9,5 L0,10 L-9,5 L-9,-5 Z',
 }
+
+/**
+ * A small mark drawn inside each glyph.
+ *
+ * ADR 0044 names four carriers -- shape, icon, label, and colour -- and the
+ * outline alone is only one of them. These are the icons: the rules on a Root's
+ * record, the seeds in a Harvest's head, the midrib of a Claim. They also do
+ * real work at small sizes, where two organic outlines converge but their
+ * interiors stay distinct.
+ *
+ * Deliberately tiny. ADR 0043 asks for decoration reduced until the knowledge
+ * nodes dominate, and an icon that competes with the label has gone too far.
+ */
+export const GLYPH_MARK: Record<GlyphShape, string> = {
+  // A germ line: the beginning of something.
+  pod: 'M0,-3 L0,4',
+  // Ruled lines, as on a record.
+  'evidence-node': 'M-5,-2 L5,-2 M-5,2 L2,2',
+  // The fork of a limb.
+  junction: 'M0,3 L0,-1 M0,-1 L-3,-4 M0,-1 L3,-4',
+  // A midrib, as a leaf has.
+  'filled-leaf': 'M-1,7 L1,-7',
+  // An unclosed inquiry keeps an empty centre.
+  'open-ring': 'M0,-2 L0,0',
+  // A spark, not yet a leaf.
+  bud: 'M0,4 L0,-3',
+  // The pupil of a lens.
+  lens: 'M-2,0 A2,2 0 1,1 2,0 A2,2 0 1,1 -2,0',
+  // Seeds in the head.
+  fruit: 'M-3,-2 L-3,-1 M0,-3 L0,-2 M3,-2 L3,-1 M-2,2 L-2,3 M2,2 L2,3',
+}

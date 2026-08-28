@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { GardenIndex } from '../domain/index/gardenIndex'
 import { labelForKind } from '../domain/schema/kindLabels'
 import { labelForRelation } from '../domain/schema/relations'
-import { GLYPH_GEOMETRY, glyphForKind } from './kindGlyphs'
+import { GLYPH_GEOMETRY, GLYPH_MARK, glyphForKind } from './kindGlyphs'
 import { computeTreeLayout, displayLabel, type TreeCrossLink } from './treeLayout'
 import type { RelationType } from '../domain/schema/relations'
 import { edgeKey, isTracing, traceEvidence } from './evidenceTrace'
@@ -268,15 +268,38 @@ export function GardenTree({
           transform: `translate(${viewport.x}px, ${viewport.y}px) scale(${viewport.scale})`,
         }}
       >
+        {/*
+          The botanical form (ADR 0043): a trunk rising through a soil line,
+          with roots spreading below it. Decoration, so it is hidden from
+          assistive technology -- the structure it depicts is already carried by
+          the treeitem levels.
+        */}
+        <g className="garden-tree__form" aria-hidden="true">
+          <line
+            className="garden-tree__soil"
+            x1={layout.trunk.soilFrom}
+            y1={layout.trunk.soilY}
+            x2={layout.trunk.soilTo}
+            y2={layout.trunk.soilY}
+          />
+          {layout.trunk.rootPaths.map((path) => (
+            <path key={path} className="garden-tree__root-flare" d={path} />
+          ))}
+          <path className="garden-tree__trunk" d={layout.trunk.path} />
+        </g>
+
         <g className="garden-tree__links" aria-hidden="true">
           {layout.links.map((link) => (
             <path
-              key={`${link.sourceId}->${link.targetId}`}
+              key={`${link.sourceId ?? 'trunk'}->${link.targetId}`}
               // Softened once anything is illuminated, unless the limb touches a
               // lit node -- otherwise a glowing node would hang off a line that
-              // read as unrelated (ADR 0045).
+              // read as unrelated (ADR 0045). A limb from the trunk is judged by
+              // the item on its far end alone.
               className={
-                tracing && !isLit(link.sourceId) && !isLit(link.targetId)
+                tracing &&
+                !(link.sourceId !== undefined && isLit(link.sourceId)) &&
+                !isLit(link.targetId)
                   ? 'garden-tree__link--dimmed'
                   : undefined
               }
@@ -380,6 +403,15 @@ export function GardenTree({
                 data-shape={glyph.shape}
                 d={GLYPH_GEOMETRY[glyph.shape]}
               />
+
+              {/* ADR 0044's icon: a mark inside the form, not the form itself. */}
+              <path
+                className={`garden-tree__mark${
+                  glyph.filled ? ' garden-tree__mark--on-fill' : ''
+                }`}
+                data-mark={glyph.shape}
+                d={GLYPH_MARK[glyph.shape]}
+              />
               {/*
                 Cross-links are drawn as curves, so without this they would be
                 visible only to someone looking at the picture.
@@ -394,10 +426,25 @@ export function GardenTree({
 
               {/* A collapsed Branch says so, so folded work is never simply absent. */}
               {node.hasChildren && !node.expanded && (
-                <text className="garden-tree__collapsed-marker" y={-15} textAnchor="middle" aria-hidden="true">
+                <text
+                  className="garden-tree__collapsed-marker"
+                  x={16}
+                  y={-10}
+                  aria-hidden="true"
+                >
                   +
                 </text>
               )}
+
+              {/*
+                Kind above, title below, as the design record's reference shows.
+                ADR 0044 wants the kind carried by a text label and not only by
+                the glyph, and a person scanning a Tree of eight forms should
+                not have to remember which is which.
+              */}
+              <text className="garden-tree__kind" y={-19} textAnchor="middle" aria-hidden="true">
+                {labelForKind(node.kind)}
+              </text>
 
               {/* The full title stays in the node's accessible name above. */}
               <text className="garden-tree__label" y={30} textAnchor="middle">

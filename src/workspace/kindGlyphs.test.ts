@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { GARDEN_ITEM_KINDS } from '../domain/schema/itemIdentity'
 import { KIND_LABELS } from '../domain/schema/kindLabels'
-import { GLYPH_GEOMETRY, KIND_GLYPHS, glyphForKind } from './kindGlyphs'
+import { GLYPH_GEOMETRY, GLYPH_MARK, KIND_GLYPHS, glyphForKind } from './kindGlyphs'
 
 /**
  * ADR 0044: shape, icon, label, and colour work together, so meaning never
@@ -147,5 +147,48 @@ describe('glyph geometry', () => {
 
       expect(Math.max(...magnitudes), `${shape} is out of scale`).toBeLessThanOrEqual(14)
     }
+  })
+})
+
+/**
+ * ADR 0044 names four carriers: shape, icon, label, and colour. The outline is
+ * only one of them, and at small sizes two organic outlines can converge while
+ * their interiors stay clearly different.
+ */
+describe('the icon inside each glyph', () => {
+  it('gives every kind a mark', () => {
+    for (const kind of GARDEN_ITEM_KINDS) {
+      expect(GLYPH_MARK[KIND_GLYPHS[kind].shape]).toMatch(/^M/)
+    }
+  })
+
+  it('gives every kind a different mark', () => {
+    const marks = GARDEN_ITEM_KINDS.map((kind) => GLYPH_MARK[KIND_GLYPHS[kind].shape])
+
+    expect(new Set(marks).size).toBe(GARDEN_ITEM_KINDS.length)
+  })
+
+  it('defines no mark that no kind uses', () => {
+    const inUse = new Set(GARDEN_ITEM_KINDS.map((kind) => KIND_GLYPHS[kind].shape))
+
+    expect(Object.keys(GLYPH_MARK).filter((shape) => !inUse.has(shape as never))).toEqual([])
+  })
+
+  // ADR 0043: reduced until the knowledge nodes dominate. An icon that competes
+  // with the label has gone too far.
+  it('keeps every mark small enough to sit inside its glyph', () => {
+    for (const [shape, path] of Object.entries(GLYPH_MARK)) {
+      const magnitudes = [...path.matchAll(/-?\d+(\.\d+)?/g)]
+        .map((match) => Math.abs(Number(match[0])))
+        .filter((value) => value > 0)
+
+      expect(Math.max(...magnitudes), `${shape} overflows its glyph`).toBeLessThanOrEqual(8)
+    }
+  })
+
+  it('distinguishes every kind by icon alone, with shape and colour removed', () => {
+    const icons = GARDEN_ITEM_KINDS.map((kind) => GLYPH_MARK[KIND_GLYPHS[kind].shape])
+
+    expect(new Set(icons).size).toBe(GARDEN_ITEM_KINDS.length)
   })
 })

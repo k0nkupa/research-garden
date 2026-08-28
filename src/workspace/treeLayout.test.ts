@@ -84,18 +84,34 @@ describe('computing the Tree layout', () => {
       { id: OPTIMISERS, title: 'Optimisers', parentId: ATTENTION },
     ])
 
-    expect(layout.links).toEqual([
+    expect(layout.links).toContainEqual(
       expect.objectContaining({ sourceId: ATTENTION, targetId: OPTIMISERS }),
-    ])
+    )
   })
 
-  it('draws no link from the implicit trunk to a top-level item', async () => {
+  /**
+   * ADR 0043 wants a recognizable trunk with limbs. ADR 0014's trunk is
+   * "implicit" in the sense that it is not an item a person creates, which
+   * drawing it does not change.
+   */
+  it('grows a limb from the trunk to each top-level item', async () => {
     const layout = await layoutOf([
       { id: ATTENTION, title: 'Attention' },
       { id: OPTIMISERS, title: 'Optimisers' },
     ])
 
-    expect(layout.links).toEqual([])
+    const fromTrunk = layout.links.filter((link) => link.sourceId === undefined)
+    expect(fromTrunk.map((link) => link.targetId).sort()).toEqual(
+      [ATTENTION, OPTIMISERS].sort(),
+    )
+  })
+
+  // ADR 0014's trunk is implicit: it is drawn, but it is never an item.
+  it('never makes the trunk an item in the Tree', async () => {
+    const layout = await layoutOf([{ id: ATTENTION, title: 'Attention' }])
+
+    expect(layout.nodes.every((node) => node.id.includes('_'))).toBe(true)
+    expect(layout.links.some((link) => link.sourceId === undefined)).toBe(true)
   })
 
   it('gives each link a path for drawing', async () => {
@@ -122,17 +138,30 @@ describe('computing the Tree layout', () => {
     }
   })
 
-  // The Tree is drawn at natural size, so the box stays tight to the content:
-  // a label must not change size with how much research a person has done.
-  it('keeps the viewBox tight to the content rather than padding it out', async () => {
+  /*
+   * The Tree is drawn at natural size, so the box grows with the content: a
+   * label must not change size with how much research a person has done. The
+   * trunk and soil set a floor, since they are drawn even in an empty Garden.
+   */
+  it('grows the viewBox as the Garden outgrows the trunk', async () => {
     const small = await layoutOf([{ id: ATTENTION, title: 'Attention' }])
-    const larger = await layoutOf([
+    const wider = await layoutOf([
       { id: ATTENTION, title: 'Attention' },
-      { id: OPTIMISERS, title: 'Optimisers', parentId: ATTENTION },
-      { id: SCALING, title: 'Scaling', parentId: ATTENTION },
+      { id: OPTIMISERS, title: 'Optimisers' },
+      { id: SCALING, title: 'Scaling' },
+      { id: `branch_01HQ8X2K3M4N5P6Q7R8S9T0V4Z`, title: 'Fourth' },
+      { id: `branch_01HQ8X2K3M4N5P6Q7R8S9T0V5Z`, title: 'Fifth' },
     ])
 
-    expect(larger.viewBox.width).toBeGreaterThan(small.viewBox.width)
+    expect(wider.viewBox.width).toBeGreaterThan(small.viewBox.width)
+  })
+
+  it('draws the trunk and soil even when the Garden is empty', async () => {
+    const layout = await layoutOf([])
+
+    expect(layout.trunk.path).toMatch(/^M/)
+    expect(layout.trunk.soilTo).toBeGreaterThan(layout.trunk.soilFrom)
+    expect(layout.viewBox.height).toBeGreaterThan(0)
   })
 
   it('lays out an empty Garden without failing', async () => {
@@ -350,6 +379,93 @@ describe('what collapse and focus do to the drawing', () => {
     const whole = computeTreeLayout(index)
     const narrowed = computeTreeLayout(index, { collapsedIds: new Set(), focusedId: OTHER })
 
-    expect(narrowed.viewBox.width).toBeLessThan(whole.viewBox.width)
+    expect(narrowed.viewBox.height).toBeLessThan(whole.viewBox.height)
+  })
+})
+
+/**
+ * ADR 0028 puts Seeds and Roots in their own stratum, and ADR 0043 asks the
+ * Tree to stay recognizably botanical. Together those make the separation
+ * literal: evidence is what the Garden stands in, and it sits below ground.
+ */
+describe('the strata', () => {
+  const SEED = 'seed_01HQ8X2K3M4N5P6Q7R8S9T0S1W'
+  const ROOT = 'root_01HQ8X2K3M4N5P6Q7R8S9T0R1W'
+  const BRANCH = 'branch_01HQ8X2K3M4N5P6Q7R8S9T0B1W'
+  const CLAIM = 'claim_leaf_01HQ8X2K3M4N5P6Q7R8S9T0C1W'
+
+  const doc = (lines: string[]) =>
+    ['---', 'schema_version: 1', ...lines, 'created_at: 2026-08-01T10:00:00Z',
+      'updated_at: 2026-08-01T10:00:00Z', '---', '', 'A body.', ''].join('\n')
+
+  async function layered() {
+    const index = await buildGardenIndex([
+      { path: ['seeds', 's.md'], text: doc([`id: ${SEED}`, 'kind: seed', 'title: A capture']) },
+      { path: ['roots', 'r.md'], text: doc([`id: ${ROOT}`, 'kind: root', 'title: Evidence', 'captured_at: 2026-08-01T09:00:00Z', 'content_hash: sha256:x']) },
+      { path: ['branches', 'b.md'], text: doc([`id: ${BRANCH}`, 'kind: branch', 'title: Topic', 'state: active']) },
+      { path: ['leaves', 'c.md'], text: doc([`id: ${CLAIM}`, 'kind: claim_leaf', 'title: A claim', `parent_id: ${BRANCH}`, 'supported_by:', `  - ${ROOT}`]) },
+    ])
+    expect(index.diagnostics, JSON.stringify(index.diagnostics)).toEqual([])
+    return computeTreeLayout(index)
+  }
+
+  const nodeIn = (layout: Awaited<ReturnType<typeof layered>>, id: string) =>
+    layout.nodes.find((node) => node.id === id)
+
+  it('buries evidence below the soil line', async () => {
+    const layout = await layered()
+
+    expect(nodeIn(layout, ROOT)?.y).toBeGreaterThan(layout.trunk.soilY)
+  })
+
+  it('buries a Seed too, being the original capture the Garden grew from', async () => {
+    const layout = await layered()
+
+    expect(nodeIn(layout, SEED)?.y).toBeGreaterThan(layout.trunk.soilY)
+  })
+
+  it('raises a Branch above the soil line', async () => {
+    const layout = await layered()
+
+    expect(nodeIn(layout, BRANCH)?.y).toBeLessThan(layout.trunk.soilY)
+  })
+
+  it('raises a Claim Leaf higher still, growing outward from its Branch', async () => {
+    const layout = await layered()
+
+    expect(nodeIn(layout, CLAIM)?.y).toBeLessThan(nodeIn(layout, BRANCH)?.y as number)
+  })
+
+  it('leaves a clear trunk between the deepest canopy and the soil', async () => {
+    const layout = await layered()
+    const lowestAbove = Math.max(
+      ...layout.nodes.filter((node) => node.y < layout.trunk.soilY).map((node) => node.y),
+    )
+
+    expect(layout.trunk.soilY - lowestAbove).toBeGreaterThan(60)
+  })
+
+  it('spans the soil line across everything drawn', async () => {
+    const layout = await layered()
+    const xs = layout.nodes.map((node) => node.x)
+
+    expect(layout.trunk.soilFrom).toBeLessThanOrEqual(Math.min(...xs))
+    expect(layout.trunk.soilTo).toBeGreaterThanOrEqual(Math.max(...xs))
+  })
+
+  it('spreads roots below the soil', async () => {
+    const layout = await layered()
+
+    expect(layout.trunk.rootPaths.length).toBeGreaterThan(1)
+    for (const path of layout.trunk.rootPaths) expect(path).toMatch(/^M0,/)
+  })
+
+  it('grows the trunk limb to a buried item downward and to a Branch upward', async () => {
+    const layout = await layered()
+    const toRoot = layout.links.find((l) => l.sourceId === undefined && l.targetId === ROOT)
+    const toBranch = layout.links.find((l) => l.sourceId === undefined && l.targetId === BRANCH)
+
+    expect(toRoot?.path).toMatch(/^M0,0 /)
+    expect(toBranch?.path).toMatch(/^M0,-\d+ /)
   })
 })

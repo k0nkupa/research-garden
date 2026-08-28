@@ -1,11 +1,10 @@
 /*
- * Botanical Instrument foundations (ADR 0039).
+ * The Botanical Instrument visual system (ADR 0039).
  *
- * These are the tokens the shell needs today. The complete visual system —
- * self-hosted Literata, Instrument Sans, and IBM Plex Mono, and the refined
- * botanical form — lands with ticket 10. Fonts are declared as stacks rather
- * than fetched from a CDN because a font request to a third party would be a
- * passive disclosure of use (ADR 0073).
+ * The palette is named once here and referred to everywhere else, so the six
+ * colours the design record fixes cannot drift apart across the interface.
+ * The typefaces are self-hosted (see styles/fonts.ts); the stacks below name
+ * fallbacks only for the moment before the local files load.
  */
 :root {
   --canvas: #edf3ee;
@@ -15,7 +14,7 @@
   --pollen: #d6a63a;
   --mulberry: #7a4e64;
 
-  --reading: Literata, 'Iowan Old Style', Georgia, serif;
+  --reading: 'Literata Variable', Literata, 'Iowan Old Style', Georgia, serif;
   --control: 'Instrument Sans', 'Helvetica Neue', Arial, sans-serif;
   --metadata: 'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
 }
@@ -300,7 +299,7 @@ body {
   padding: 0.5rem 0.6rem;
   font-family: var(--control);
   font-size: 0.85rem;
-  color: color-mix(in srgb, var(--bark) 60%, transparent);
+  color: color-mix(in srgb, var(--bark) 72%, transparent);
 }
 
 .workspace__search-result {
@@ -411,6 +410,34 @@ body {
 }
 
 /*
+ * The botanical form (ADR 0043). Recognizably a tree -- trunk, soil, roots --
+ * but drawn quietly enough that the knowledge nodes stay dominant and labels
+ * stay immediately scannable. It is scenery, not the subject.
+ */
+.garden-tree__trunk {
+  fill: none;
+  stroke: var(--bark);
+  stroke-width: 7;
+  stroke-linecap: round;
+  stroke-opacity: 0.9;
+}
+
+.garden-tree__root-flare {
+  fill: none;
+  stroke: var(--bark);
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-opacity: 0.18;
+}
+
+.garden-tree__soil {
+  stroke: color-mix(in srgb, var(--bark) 45%, transparent);
+  stroke-width: 1.25;
+  stroke-dasharray: 3 7;
+  stroke-linecap: round;
+}
+
+/*
  * Cross-links: relationships outside an item's placement in the Tree. Dashed so
  * they never read as structure, and mulberry for Contradicts (ADR 0045).
  */
@@ -504,12 +531,43 @@ body {
   fill: var(--mulberry);
 }
 
+/*
+ * ADR 0044's icon: a mark *inside* the form rather than a second form beside
+ * it, so kind survives being read at a glance and at small sizes.
+ *
+ * Stroked, never filled. These are open paths -- a stem, a pair of rules, a
+ * fork -- and an open path with a fill and no stroke paints nothing at all,
+ * which is exactly how the first version of this shipped invisible.
+ *
+ * `pointer-events: none` because the mark sits over its glyph inside the
+ * node's hit area, and a mark that swallowed a click would make the node
+ * harder to select the more legible it got.
+ */
+.garden-tree__mark {
+  fill: none;
+  stroke: var(--bark);
+  stroke-width: 1.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  pointer-events: none;
+}
+
+/*
+ * On a filled glyph the mark is cut out of the fill rather than drawn on it,
+ * because bark on a bark-filled form is invisible. The canvas colour is the
+ * one thing guaranteed to contrast with every fill in the palette.
+ */
+.garden-tree__mark--on-fill {
+  stroke: var(--canvas);
+}
+
 .garden-tree__node--selected .garden-tree__glyph {
   stroke-width: 4;
 }
 
 .garden-tree__label {
-  font-family: var(--control);
+  /* ADR 0039 gives titles to Literata, and a node's title is a title. */
+  font-family: var(--reading);
   font-size: 14px;
   fill: var(--bark);
   /* A canvas-coloured halo so a label stays readable where a limb passes behind it. */
@@ -534,12 +592,18 @@ body {
  * metaphor, not archive semantics.
  */
 /*
- * Enough to recede, not so much that the label stops being readable: ADR 0044
- * asks for an accessible colour treatment, and a Dormant Branch is still
- * something a person is meant to be able to find.
+ * A Dormant Branch recedes by fading its drawing, never its words. Fading the
+ * whole node took the label down to 3.9:1 -- below what ADR 0044 asks for, and
+ * in a state a Branch can sit in indefinitely (ADR 0031). A dormant Branch is
+ * still something a person is meant to be able to read and find.
  */
-.garden-tree__node--dormant {
-  opacity: 0.62;
+.garden-tree__node--dormant .garden-tree__glyph {
+  opacity: 0.5;
+}
+
+.garden-tree__node--dormant .garden-tree__label,
+.garden-tree__node--dormant .garden-tree__kind {
+  font-style: italic;
 }
 
 /*
@@ -576,6 +640,27 @@ body {
 }
 
 /* A folded Branch says so, so hidden work is never simply absent. */
+/*
+ * ADR 0044: the kind is carried by a text label as well as by the glyph, so a
+ * person scanning eight forms never has to remember which is which. Quiet
+ * enough that the title stays the thing being read.
+ */
+.garden-tree__kind {
+  font-family: var(--metadata);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  fill: color-mix(in srgb, var(--bark) 78%, transparent);
+  paint-order: stroke;
+  stroke: var(--canvas);
+  stroke-width: 3px;
+  stroke-linejoin: round;
+}
+
+.garden-tree__node--selected .garden-tree__kind {
+  fill: var(--canopy);
+}
+
 .garden-tree__collapsed-marker {
   font-family: var(--metadata);
   font-size: 15px;
@@ -617,7 +702,7 @@ body {
 .item-panel__invitation {
   font-family: var(--control);
   font-size: 0.9rem;
-  color: color-mix(in srgb, var(--bark) 60%, transparent);
+  color: color-mix(in srgb, var(--bark) 72%, transparent);
   text-align: center;
   max-width: 22ch;
 }
@@ -731,7 +816,7 @@ body {
   margin: 0 0 0.5rem;
   font-family: var(--metadata);
   font-size: 0.75rem;
-  color: color-mix(in srgb, var(--bark) 55%, transparent);
+  color: color-mix(in srgb, var(--bark) 72%, transparent);
 }
 
 .diagnostics__problems {
@@ -790,7 +875,7 @@ body {
   background: none;
   border: none;
   padding: 0;
-  color: color-mix(in srgb, var(--bark) 55%, transparent);
+  color: color-mix(in srgb, var(--bark) 72%, transparent);
   cursor: pointer;
   text-decoration: underline;
   text-underline-offset: 2px;
@@ -807,7 +892,7 @@ body {
   font-family: var(--metadata);
   font-size: 0.8rem;
   line-height: 1.6;
-  color: color-mix(in srgb, var(--bark) 65%, transparent);
+  color: color-mix(in srgb, var(--bark) 72%, transparent);
 }
 
 /* Media Research Garden will not load (ADR 0057) */
@@ -827,5 +912,5 @@ body {
 .refused-media {
   font-family: var(--metadata);
   font-size: 0.85em;
-  color: color-mix(in srgb, var(--bark) 55%, transparent);
+  color: color-mix(in srgb, var(--bark) 72%, transparent);
 }
