@@ -83,6 +83,7 @@ export function Workspace({ garden }: WorkspaceProps) {
           <ItemPanel
             selected={selected}
             diagnostics={selectedId === undefined ? [] : diagnosticsForItem(garden.index, selectedId)}
+            fileSystem={garden.fileSystem}
           />
         )}
       </div>

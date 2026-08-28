@@ -34,6 +34,7 @@ function delegateTo(fileSystem: GardenFileSystem): GardenFileSystem {
     requestPermission: () => fileSystem.requestPermission(),
     listFiles: (directory) => fileSystem.listFiles(directory),
     read: (path) => fileSystem.read(path),
+    readBytes: (path) => fileSystem.readBytes(path),
     write: (path, contents) => fileSystem.write(path, contents),
   }
 }
@@ -195,6 +196,7 @@ describe('when the folder cannot be read at all', () => {
         throw new Error('the disk went away')
       },
       read: async () => '',
+      readBytes: async () => new Uint8Array(),
       write: async () => {},
     }
 

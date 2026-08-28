@@ -2,13 +2,17 @@
  * @vitest-environment jsdom
  */
 import { describe, expect, it } from 'vitest'
-import { render, screen } from '@testing-library/react'
+import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { buildGardenIndex } from '../domain/index/gardenIndex'
+import { InMemoryGardenFileSystem } from '../filesystem/InMemoryGardenFileSystem'
 import { GARDEN_ITEM_KINDS } from '../domain/schema/itemIdentity'
 import { KIND_LABELS } from '../domain/schema/kindLabels'
 import { KIND_GLYPHS } from './kindGlyphs'
 import { Workspace } from './Workspace'
+
+/** A Garden with no Attachments; individual tests supply their own. */
+const emptyRepository = () => new InMemoryGardenFileSystem({}, 'test-garden')
 
 const ATTENTION = 'branch_01HQ8X2K3M4N5P6Q7R8S9T0V1W'
 const OPTIMISERS = 'branch_01HQ8X2K3M4N5P6Q7R8S9T0V2X'
@@ -37,7 +41,7 @@ async function renderWorkspace(
       text: branchFile(file.id, file.title, file.body, file.parentId),
     })),
   )
-  return render(<Workspace garden={{ repositoryName: 'my-garden', index }} />)
+  return render(<Workspace garden={{ repositoryName: 'my-garden', index, fileSystem: emptyRepository() }} />)
 }
 
 const oneBranch = [{ id: ATTENTION, title: 'Attention mechanisms', body: 'What I am collecting.' }]
@@ -248,7 +252,7 @@ describe('a Garden holding every kind', () => {
   async function renderEveryKind() {
     const index = await buildGardenIndex(GARDEN_ITEM_KINDS.map((kind, at) => fileFor(kind, at)))
     expect(index.diagnostics, JSON.stringify(index.diagnostics)).toEqual([])
-    return render(<Workspace garden={{ repositoryName: 'every-kind', index }} />)
+    return render(<Workspace garden={{ repositoryName: 'every-kind', index, fileSystem: emptyRepository() }} />)
   }
 
   it('renders a node for every kind', async () => {
@@ -316,7 +320,7 @@ describe('Cross-links in the Tree', () => {
       { path: ['leaves', 'c2.md'], text: front([`id: ${CLAIM_2_ID}`, 'kind: claim_leaf', 'title: Costs rise', `parent_id: ${BRANCH_ID}`, 'supported_by:', `  - ${ROOT_ID}`]) },
     ])
     expect(index.diagnostics, JSON.stringify(index.diagnostics)).toEqual([])
-    return render(<Workspace garden={{ repositoryName: 'g', index }} />)
+    return render(<Workspace garden={{ repositoryName: 'g', index, fileSystem: emptyRepository() }} />)
   }
 
   it('draws the Contradicts Cross-link', async () => {
@@ -387,7 +391,7 @@ describe('Cross-link styling hooks', () => {
       { path: ['leaves', 'c1.md'], text: front([`id: ${CLAIM_ID}`, 'kind: claim_leaf', 'title: One', `parent_id: ${BRANCH_ID}`, 'supported_by:', `  - ${ROOT_ID}`, 'relations:', '  - type: relates_to', `    target: ${CLAIM_2_ID}`]) },
       { path: ['leaves', 'c2.md'], text: front([`id: ${CLAIM_2_ID}`, 'kind: claim_leaf', 'title: Two', `parent_id: ${BRANCH_ID}`, 'supported_by:', `  - ${ROOT_ID}`]) },
     ])
-    const { container } = render(<Workspace garden={{ repositoryName: 'g', index }} />)
+    const { container } = render(<Workspace garden={{ repositoryName: 'g', index, fileSystem: emptyRepository() }} />)
 
     expect(container.querySelector('.garden-tree__cross-link--relates-to')).toBeInTheDocument()
     expect(container.querySelector('.garden-tree__cross-link--relates_to')).toBeNull()
@@ -429,7 +433,7 @@ describe('Garden Diagnostics in the workspace', () => {
 
   async function renderWith(files: { path: string[]; text: string }[]) {
     const index = await buildGardenIndex(files)
-    return { ...render(<Workspace garden={{ repositoryName: 'g', index }} />), index }
+    return { ...render(<Workspace garden={{ repositoryName: 'g', index, fileSystem: emptyRepository() }} />), index }
   }
 
   it('shows how many files need attention', async () => {
@@ -571,7 +575,7 @@ describe('a workspace where nothing is valid', () => {
       { path: ['branches', 'a.md'], text: 'no frontmatter\n' },
       { path: ['roots', 'b.md'], text: '---\nkind: [unclosed\n---\n\nbody\n' },
     ])
-    render(<Workspace garden={{ repositoryName: 'g', index }} />)
+    render(<Workspace garden={{ repositoryName: 'g', index, fileSystem: emptyRepository() }} />)
 
     expect(screen.getByRole('tree')).toBeInTheDocument()
     expect(screen.queryAllByRole('treeitem')).toEqual([])
@@ -588,7 +592,7 @@ describe('a Diagnostic for a file with nothing to name', () => {
     const index = await buildGardenIndex([
       { path: ['seeds', 'lost-note.md'], text: 'pasted in without frontmatter\n' },
     ])
-    render(<Workspace garden={{ repositoryName: 'g', index }} />)
+    render(<Workspace garden={{ repositoryName: 'g', index, fileSystem: emptyRepository() }} />)
     await userEvent.click(screen.getByRole('button', { name: /Diagnostic/ }))
 
     const panel = screen.getByRole('complementary', { name: /Garden Diagnostics/ })
@@ -605,7 +609,7 @@ describe('a Diagnostic for a file with nothing to name', () => {
           'updated_at: 2026-08-01T10:00:00Z', '---', '', 'b', ''].join('\n'),
       },
     ])
-    render(<Workspace garden={{ repositoryName: 'g', index }} />)
+    render(<Workspace garden={{ repositoryName: 'g', index, fileSystem: emptyRepository() }} />)
     await userEvent.click(screen.getByRole('button', { name: /Diagnostic/ }))
 
     const panel = screen.getByRole('complementary', { name: /Garden Diagnostics/ })
@@ -625,7 +629,7 @@ describe('two files claiming one id, in the workspace', () => {
       { path: ['branches', 'real.md'], text: claimant('The real one') },
       { path: ['branches', 'copy.md'], text: claimant('The impostor') },
     ])
-    return render(<Workspace garden={{ repositoryName: 'g', index }} />)
+    return render(<Workspace garden={{ repositoryName: 'g', index, fileSystem: emptyRepository() }} />)
   }
 
   it('does not mark the surviving item as needing attention', async () => {
@@ -653,5 +657,221 @@ describe('two files claiming one id, in the workspace', () => {
     expect(panel).toHaveTextContent('The impostor')
     expect(panel).toHaveTextContent('branches/copy.md')
     expect(screen.queryByRole('button', { name: 'The impostor' })).not.toBeInTheDocument()
+  })
+})
+
+/**
+ * ADR 0057: a validated relative Attachment renders, and it does so from bytes
+ * read out of the chosen folder — never from a URL the browser resolves.
+ */
+describe('Attachments in the reading panel', () => {
+  const BRANCH_ID = 'branch_01HQ8X2K3M4N5P6Q7R8S9T0B1W'
+
+  const itemWith = (body: string) =>
+    ['---', 'schema_version: 1', `id: ${BRANCH_ID}`, 'kind: branch', 'title: A topic',
+      'state: active', 'created_at: 2026-08-01T10:00:00Z', 'updated_at: 2026-08-01T10:00:00Z',
+      '---', '', body, ''].join('\n')
+
+  async function renderWithAttachment(body: string, files: Record<string, string> = {}) {
+    const index = await buildGardenIndex([{ path: ['branches', 'b.md'], text: itemWith(body) }])
+    const fileSystem = new InMemoryGardenFileSystem(files, 'test-garden')
+    const rendered = render(
+      <Workspace garden={{ repositoryName: 'g', index, fileSystem }} />,
+    )
+    await userEvent.click(screen.getByRole('treeitem', { name: /A topic/ }))
+    return rendered
+  }
+
+  it('gives a valid Attachment a source read from the folder', async () => {
+    const { container } = await renderWithAttachment('![diagram](attachments/diagram.png)', {
+      'attachments/diagram.png': 'pretend png bytes',
+    })
+
+    await waitFor(() =>
+      expect(container.querySelector('img')).toHaveAttribute('src', expect.stringContaining('blob:')),
+    )
+  })
+
+  // The point: nothing is fetched, and no path is resolved against the page.
+  it('never gives an Attachment a path the browser would resolve', async () => {
+    const { container } = await renderWithAttachment('![diagram](attachments/diagram.png)', {
+      'attachments/diagram.png': 'bytes',
+    })
+
+    await waitFor(() => expect(container.querySelector('img')).toHaveAttribute('src'))
+    expect(container.querySelector('img')?.getAttribute('src')).not.toContain('attachments/')
+  })
+
+  it('says what was meant to be there when the Attachment is missing', async () => {
+    const { container } = await renderWithAttachment('![diagram](attachments/absent.png)')
+
+    await waitFor(() => expect(container.querySelector('.refused-media')).not.toBeNull())
+    expect(container.textContent).toContain('diagram')
+  })
+
+  // SVG can carry script, and an Attachment is untrusted like anything else.
+  it('refuses to render an SVG Attachment', async () => {
+    const { container } = await renderWithAttachment('![logo](attachments/logo.svg)', {
+      'attachments/logo.svg': '<svg onload="globalThis.owned = true"></svg>',
+    })
+
+    await waitFor(() => expect(container.querySelector('.refused-media')).not.toBeNull())
+    expect(container.querySelector('img')).toBeNull()
+  })
+
+  it('renders a remote image as a link rather than fetching it', async () => {
+    const { container } = await renderWithAttachment('![tracker](https://evil.example/p.png)')
+
+    expect(container.querySelector('img')).toBeNull()
+    expect(container.querySelector('a.remote-media')).toHaveAttribute(
+      'href',
+      'https://evil.example/p.png',
+    )
+  })
+
+  it('renders nothing loadable for a path that leaves the Garden', async () => {
+    const { container } = await renderWithAttachment('![x](../../../etc/passwd)')
+
+    expect(container.querySelector('img')).toBeNull()
+    expect(container.querySelector('[data-attachment]')).toBeNull()
+  })
+})
+
+/**
+ * "Hostile content in an item title or frontmatter value is treated with the
+ * same distrust as body content."
+ */
+describe('hostile titles', () => {
+  const HOSTILE = '<img src=x onerror="globalThis.owned = true">'
+
+  async function renderHostileTitle() {
+    const index = await buildGardenIndex([
+      {
+        path: ['branches', 'b.md'],
+        text: ['---', 'schema_version: 1', 'id: branch_01HQ8X2K3M4N5P6Q7R8S9T0B1W',
+          'kind: branch', `title: '${HOSTILE}'`, 'state: active',
+          'created_at: 2026-08-01T10:00:00Z', 'updated_at: 2026-08-01T10:00:00Z',
+          '---', '', 'A body.', ''].join('\n'),
+      },
+    ])
+    expect(index.diagnostics, JSON.stringify(index.diagnostics)).toEqual([])
+    return render(<Workspace garden={{ repositoryName: 'g', index, fileSystem: emptyRepository() }} />)
+  }
+
+  it('creates no element from a hostile title in the Tree', async () => {
+    const { container } = await renderHostileTitle()
+
+    expect(container.querySelector('img[onerror]')).toBeNull()
+    expect(container.querySelector('img[src="x"]')).toBeNull()
+  })
+
+  it('creates no active attribute anywhere from a hostile title', async () => {
+    const { container } = await renderHostileTitle()
+
+    const active = [...container.querySelectorAll('*')].flatMap((element) =>
+      [...element.attributes].map((attribute) => attribute.name).filter((n) => n.startsWith('on')),
+    )
+    expect(active).toEqual([])
+  })
+
+  it('shows the hostile title as text instead', async () => {
+    const { container } = await renderHostileTitle()
+
+    expect(container.textContent).toContain('onerror')
+  })
+
+  it('creates no element from a hostile title in the reading panel', async () => {
+    await renderHostileTitle()
+    await userEvent.click(screen.getAllByRole('treeitem')[0] as HTMLElement)
+
+    const panel = screen.getByRole('complementary', { name: /Selected item/ })
+    expect(panel.querySelector('img')).toBeNull()
+    expect(panel.querySelector('script')).toBeNull()
+  })
+
+  it('creates no element from a hostile Diagnostic message either', async () => {
+    const index = await buildGardenIndex([
+      { path: ['branches', `${HOSTILE}.md`], text: 'no frontmatter\n' },
+    ])
+    const { container } = render(
+      <Workspace garden={{ repositoryName: 'g', index, fileSystem: emptyRepository() }} />,
+    )
+    await userEvent.click(screen.getByRole('button', { name: /Diagnostic/ }))
+
+    expect(container.querySelector('img')).toBeNull()
+    expect(container.textContent).toContain('onerror')
+  })
+})
+
+/**
+ * CONTEXT.md defines an Attachment as any user-owned supporting file, not only
+ * an image. A relative href would navigate the application away and take the
+ * folder permission with it, so a link gets its bytes the same way.
+ */
+describe('non-image Attachments', () => {
+  const BRANCH_ID = 'branch_01HQ8X2K3M4N5P6Q7R8S9T0B1W'
+
+  async function renderLinkTo(body: string, files: Record<string, string | Uint8Array> = {}) {
+    const index = await buildGardenIndex([
+      {
+        path: ['branches', 'b.md'],
+        text: ['---', 'schema_version: 1', `id: ${BRANCH_ID}`, 'kind: branch', 'title: A topic',
+          'state: active', 'created_at: 2026-08-01T10:00:00Z', 'updated_at: 2026-08-01T10:00:00Z',
+          '---', '', body, ''].join('\n'),
+      },
+    ])
+    const rendered = render(
+      <Workspace
+        garden={{ repositoryName: 'g', index, fileSystem: new InMemoryGardenFileSystem(files, 'g') }}
+      />,
+    )
+    await userEvent.click(screen.getByRole('treeitem', { name: /A topic/ }))
+    return rendered
+  }
+
+  it('opens a PDF Attachment from bytes read out of the folder', async () => {
+    const { container } = await renderLinkTo('[paper](attachments/paper.pdf)', {
+      'attachments/paper.pdf': new Uint8Array([0x25, 0x50, 0x44, 0x46]),
+    })
+
+    await waitFor(() =>
+      expect(container.querySelector('a[download]')).toHaveAttribute(
+        'href',
+        expect.stringContaining('blob:'),
+      ),
+    )
+  })
+
+  it('names the file it downloads', async () => {
+    const { container } = await renderLinkTo('[paper](attachments/paper.pdf)', {
+      'attachments/paper.pdf': 'bytes',
+    })
+
+    await waitFor(() =>
+      expect(container.querySelector('a[download]')).toHaveAttribute('download', 'paper.pdf'),
+    )
+  })
+
+  it('opens it away from the Garden, so the folder stays open behind it', async () => {
+    const { container } = await renderLinkTo('[paper](attachments/paper.pdf)', {
+      'attachments/paper.pdf': 'bytes',
+    })
+
+    await waitFor(() => expect(container.querySelector('a[download]')).not.toBeNull())
+    expect(container.querySelector('a[download]')).toHaveAttribute('target', '_blank')
+  })
+
+  it('says so when the linked Attachment is not there', async () => {
+    const { container } = await renderLinkTo('[paper](attachments/absent.pdf)')
+
+    await waitFor(() => expect(container.querySelector('.refused-media')).not.toBeNull())
+    expect(container.textContent).toContain('paper')
+  })
+
+  it('renders no link at all for a path that leaves the Garden', async () => {
+    const { container } = await renderLinkTo('[escape](../../../etc/passwd)')
+
+    expect(container.querySelector('.item-panel__body a')).toBeNull()
+    expect(container.textContent).toContain('escape')
   })
 })

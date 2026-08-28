@@ -264,3 +264,63 @@ export function describeVanishingRepository(
     })
   })
 }
+
+/** Reading a file as bytes, which is how Attachments are read (ADR 0057). */
+export function describeByteReading(
+  name: string,
+  setUp: (files: Record<string, string | Uint8Array>) => ContractSubject,
+) {
+  describe(`${name} reads bytes`, () => {
+    const garden = { 'attachments/note.txt': 'hello' }
+
+    /** Every byte value, including those no text encoding round-trips. */
+    const binary = new Uint8Array(Array.from({ length: 256 }, (_, at) => at))
+
+    it('returns binary bytes exactly as stored', async () => {
+      const { fileSystem } = setUp({ 'attachments/photo.png': binary })
+
+      const read = await fileSystem.readBytes(['attachments', 'photo.png'])
+      expect([...read]).toEqual([...binary])
+    })
+
+    it('does not corrupt a byte that is not valid text', async () => {
+      const { fileSystem } = setUp({ 'attachments/photo.png': new Uint8Array([0xff, 0xfe, 0x00]) })
+
+      expect([...(await fileSystem.readBytes(['attachments', 'photo.png']))]).toEqual([
+        0xff, 0xfe, 0x00,
+      ])
+    })
+
+    it('reads the bytes of a file', async () => {
+      const { fileSystem } = setUp(garden)
+
+      const bytes = await fileSystem.readBytes(['attachments', 'note.txt'])
+      expect(new TextDecoder().decode(bytes)).toBe('hello')
+    })
+
+    it('reports a missing file as not-found', async () => {
+      const { fileSystem } = setUp(garden)
+
+      await expect(fileSystem.readBytes(['attachments', 'absent.png'])).rejects.toMatchObject({
+        code: 'not-found',
+      })
+    })
+
+    it('refuses a path that leaves the Garden Repository', async () => {
+      const { fileSystem } = setUp(garden)
+
+      await expect(fileSystem.readBytes(['..', 'secrets.png'])).rejects.toMatchObject({
+        code: 'path-escape',
+      })
+    })
+
+    it('refuses once permission has lapsed', async () => {
+      const { fileSystem, revokePermission } = setUp(garden)
+      revokePermission()
+
+      await expect(fileSystem.readBytes(['attachments', 'note.txt'])).rejects.toMatchObject({
+        code: 'permission-denied',
+      })
+    })
+  })
+}

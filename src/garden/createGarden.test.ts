@@ -337,6 +337,7 @@ describe('when the folder cannot be written', () => {
       requestPermission: async () => 'granted' as const,
       listFiles: async () => [],
       read: async () => '',
+      readBytes: async () => new Uint8Array(),
       write: async () => {
         throw new Error('the disk went away')
       },

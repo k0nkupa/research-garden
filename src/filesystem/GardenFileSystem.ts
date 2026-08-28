@@ -53,6 +53,14 @@ export interface GardenFileSystem {
 
   read(path: GardenPath): Promise<string>
 
+  /**
+   * The raw bytes at a path.
+   *
+   * Attachments are a person's own supporting files -- images, PDFs -- and are
+   * not text (ADR 0057). Reading them as text would corrupt them.
+   */
+  readBytes(path: GardenPath): Promise<Uint8Array>
+
   /** One complete write. Verification of the result belongs to a later layer. */
   write(path: GardenPath, contents: string): Promise<void>
 }

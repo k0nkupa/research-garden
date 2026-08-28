@@ -19,6 +19,13 @@ import { CANONICAL_DIRECTORIES } from '../domain/schema/itemIdentity'
 export interface OpenedGarden {
   readonly repositoryName: string
   readonly index: GardenIndex
+  /**
+   * The folder this Garden was read from.
+   *
+   * Carried so Attachments can be read out of it on demand (ADR 0057). The
+   * index itself stays free of the filesystem.
+   */
+  readonly fileSystem: GardenFileSystem
 }
 
 export type OpenGardenResult =
@@ -55,7 +62,10 @@ export async function openGarden(fileSystem: GardenFileSystem): Promise<OpenGard
       }
     }
 
-    return { kind: 'opened', garden: { repositoryName, index: await buildGardenIndex(scanned) } }
+    return {
+      kind: 'opened',
+      garden: { repositoryName, fileSystem, index: await buildGardenIndex(scanned) },
+    }
   } catch (error) {
     // Permission can lapse between the check above and any read that follows, so
     // the recoverable case is recognised wherever it surfaces rather than only

@@ -24,6 +24,17 @@ interface FakeState {
   vanished?: boolean
 }
 
+/** Text or raw bytes, so binary Attachments can be faked faithfully. */
+export type FakeFile = string | Uint8Array
+
+function asBytes(contents: FakeFile): Uint8Array {
+  return typeof contents === 'string' ? new TextEncoder().encode(contents) : contents
+}
+
+function asText(contents: FakeFile): string {
+  return typeof contents === 'string' ? contents : new TextDecoder().decode(contents)
+}
+
 class FakeFileHandle implements FileHandleLike {
   readonly kind = 'file' as const
 
@@ -35,7 +46,16 @@ class FakeFileHandle implements FileHandleLike {
 
   async getFile() {
     this.#assertPermitted()
-    return { text: async () => this.directory.contentsOf(this.name) }
+    return {
+      text: async () => asText(this.directory.contentsOf(this.name)),
+      arrayBuffer: async () => {
+        const bytes = asBytes(this.directory.contentsOf(this.name))
+        return bytes.buffer.slice(
+          bytes.byteOffset,
+          bytes.byteOffset + bytes.byteLength,
+        ) as ArrayBuffer
+      },
+    }
   }
 
   async createWritable() {
@@ -48,7 +68,7 @@ class FakeFileHandle implements FileHandleLike {
     return {
       write: async (data: string) => {
         this.#assertPermitted()
-        this.directory.setContents(this.name, this.directory.contentsOf(this.name) + data)
+        this.directory.setContents(this.name, asText(this.directory.contentsOf(this.name)) + data)
       },
       close: async () => {
         this.#assertPermitted()
@@ -64,14 +84,14 @@ class FakeFileHandle implements FileHandleLike {
 export class FakeDirectoryHandle implements DirectoryHandleLike {
   readonly kind = 'directory' as const
   #directories = new Map<string, FakeDirectoryHandle>()
-  #files = new Map<string, string>()
+  #files = new Map<string, FakeFile>()
 
   constructor(
     readonly name: string,
     private readonly state: FakeState = { permission: 'granted' },
   ) {}
 
-  static fromFiles(files: Record<string, string>, name = 'fake-garden'): FakeDirectoryHandle {
+  static fromFiles(files: Record<string, FakeFile>, name = 'fake-garden'): FakeDirectoryHandle {
     const root = new FakeDirectoryHandle(name)
     for (const [path, contents] of Object.entries(files)) {
       const segments = path.split('/')
@@ -100,11 +120,11 @@ export class FakeDirectoryHandle implements DirectoryHandleLike {
     return created
   }
 
-  setContents(name: string, contents: string): void {
+  setContents(name: string, contents: FakeFile): void {
     this.#files.set(name, contents)
   }
 
-  contentsOf(name: string): string {
+  contentsOf(name: string): FakeFile {
     const contents = this.#files.get(name)
     if (contents === undefined) throw domException('NotFoundError')
     return contents

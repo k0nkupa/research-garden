@@ -15,12 +15,15 @@ import {
  * (ADR 0065). It is a real adapter, not a stub: it satisfies the same contract
  * as the File System Access adapter, including path safety and permission loss.
  */
+/** Text or raw bytes: an Attachment is not text (ADR 0057). */
+export type InMemoryFile = string | Uint8Array
+
 export class InMemoryGardenFileSystem implements GardenFileSystem {
   readonly repositoryName: string
-  #files: Map<string, string>
+  #files: Map<string, InMemoryFile>
   #permission: GardenPermissionState = 'granted'
 
-  constructor(files: Record<string, string> = {}, repositoryName = 'in-memory-garden') {
+  constructor(files: Record<string, InMemoryFile> = {}, repositoryName = 'in-memory-garden') {
     this.repositoryName = repositoryName
     this.#files = new Map(Object.entries(files))
   }
@@ -36,7 +39,9 @@ export class InMemoryGardenFileSystem implements GardenFileSystem {
 
   /** Test affordance: inspect what was actually written, without going through read(). */
   snapshot(): Record<string, string> {
-    return Object.fromEntries(this.#files)
+    return Object.fromEntries(
+      [...this.#files].map(([path, contents]) => [path, asText(contents)]),
+    )
   }
 
   async permission(): Promise<GardenPermissionState> {
@@ -63,7 +68,7 @@ export class InMemoryGardenFileSystem implements GardenFileSystem {
 
     const key = formatGardenPath(path)
     const contents = this.#files.get(key)
-    if (contents !== undefined) return contents
+    if (contents !== undefined) return asText(contents)
 
     // A path that is a prefix of other files names a directory, not a file.
     const isDirectory = [...this.#files.keys()].some((other) => other.startsWith(`${key}/`))
@@ -71,6 +76,22 @@ export class InMemoryGardenFileSystem implements GardenFileSystem {
       isDirectory ? 'not-a-file' : 'not-found',
       isDirectory ? `"${key}" is a directory.` : `"${key}" does not exist.`,
     )
+  }
+
+  async readBytes(path: GardenPath): Promise<Uint8Array> {
+    assertPathWithinRepository(path)
+    this.#assertPermitted()
+
+    const contents = this.#files.get(formatGardenPath(path))
+    // Bytes are returned exactly as stored, so a byte-corrupting bug in an
+    // adapter has somewhere to show itself.
+    if (contents !== undefined) {
+      return typeof contents === 'string' ? new TextEncoder().encode(contents) : contents
+    }
+
+    // Delegating reproduces read()'s not-found and not-a-file distinction.
+    await this.read(path)
+    throw new GardenFileSystemError('not-found', `"${formatGardenPath(path)}" does not exist.`)
   }
 
   async write(path: GardenPath, contents: string): Promise<void> {
@@ -83,4 +104,8 @@ export class InMemoryGardenFileSystem implements GardenFileSystem {
   #assertPermitted(): void {
     if (this.#permission !== 'granted') throw permissionLapsed()
   }
+}
+
+function asText(contents: InMemoryFile): string {
+  return typeof contents === 'string' ? contents : new TextDecoder().decode(contents)
 }

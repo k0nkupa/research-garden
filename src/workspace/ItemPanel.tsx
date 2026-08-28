@@ -1,8 +1,10 @@
-import { useMemo } from 'react'
+import { useMemo, useRef } from 'react'
 import type { GardenDiagnostic, IndexedItem } from '../domain/index/gardenIndex'
+import type { GardenFileSystem } from '../filesystem/GardenFileSystem'
 import { renderGardenMarkdown } from '../domain/markdown/renderGardenMarkdown'
 import { labelForKind } from '../domain/schema/kindLabels'
 import { ProblemList } from './ProblemList'
+import { useAttachments } from './useAttachments'
 
 /**
  * The selected-item panel.
@@ -17,13 +19,18 @@ export interface ItemPanelProps {
   readonly selected: IndexedItem | undefined
   /** ADR 0052: an item with Diagnostics is readable but not writable. */
   readonly diagnostics: readonly GardenDiagnostic[]
+  /** The folder Attachments are read from (ADR 0057). */
+  readonly fileSystem?: GardenFileSystem | undefined
 }
 
-export function ItemPanel({ selected, diagnostics }: ItemPanelProps) {
+export function ItemPanel({ selected, diagnostics, fileSystem }: ItemPanelProps) {
+  const body = useRef<HTMLDivElement>(null)
   const html = useMemo(
     () => (selected ? renderGardenMarkdown(selected.item.body) : ''),
     [selected],
   )
+
+  useAttachments(body, fileSystem, html)
 
   if (!selected) {
     return (
@@ -49,7 +56,11 @@ export function ItemPanel({ selected, diagnostics }: ItemPanelProps) {
         </div>
       )}
 
-      <div className="item-panel__body" dangerouslySetInnerHTML={{ __html: html }} />
+      <div
+        className="item-panel__body"
+        ref={body}
+        dangerouslySetInnerHTML={{ __html: html }}
+      />
     </aside>
   )
 }

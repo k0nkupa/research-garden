@@ -596,3 +596,23 @@ body {
   line-height: 1.6;
   color: color-mix(in srgb, var(--bark) 65%, transparent);
 }
+
+/* Media Research Garden will not load (ADR 0057) */
+
+/* Bounded so an Attachment cannot break the panel; ticket 10 styles the rest. */
+.item-panel__body img {
+  max-width: 100%;
+  height: auto;
+}
+
+.remote-media {
+  font-family: var(--metadata);
+  font-size: 0.85em;
+  word-break: break-all;
+}
+
+.refused-media {
+  font-family: var(--metadata);
+  font-size: 0.85em;
+  color: color-mix(in srgb, var(--bark) 55%, transparent);
+}

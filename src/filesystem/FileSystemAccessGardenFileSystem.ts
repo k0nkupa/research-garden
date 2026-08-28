@@ -27,7 +27,7 @@ export interface DirectoryHandleLike {
 export interface FileHandleLike {
   readonly kind: 'file'
   readonly name: string
-  getFile(): Promise<{ text(): Promise<string> }>
+  getFile(): Promise<{ text(): Promise<string>; arrayBuffer(): Promise<ArrayBuffer> }>
   createWritable(): Promise<{ write(data: string): Promise<void>; close(): Promise<void> }>
 }
 
@@ -86,6 +86,23 @@ export class FileSystemAccessGardenFileSystem implements GardenFileSystem {
     try {
       const file = await parent.getFileHandle(name)
       return await (await file.getFile()).text()
+    } catch (error) {
+      throw this.#translate(error, path)
+    }
+  }
+
+  async readBytes(path: GardenPath): Promise<Uint8Array> {
+    assertPathWithinRepository(path)
+    await this.#assertPermitted()
+
+    const { parent, name } = await this.#resolveParent(path)
+    if (parent === undefined) {
+      throw new GardenFileSystemError('not-found', `"${formatGardenPath(path)}" does not exist.`)
+    }
+
+    try {
+      const file = await parent.getFileHandle(name)
+      return new Uint8Array(await (await file.getFile()).arrayBuffer())
     } catch (error) {
       throw this.#translate(error, path)
     }
