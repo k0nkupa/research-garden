@@ -3,6 +3,7 @@ import {
   parseGardenDocument,
   serializeGardenDocument,
   serializeNewGardenDocument,
+  setBody,
   setFrontmatterField,
 } from './gardenDocument'
 

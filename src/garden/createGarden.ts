@@ -4,6 +4,7 @@ import {
   type GardenPath,
 } from '../filesystem/GardenFileSystem'
 import { serializeNewGardenDocument } from '../domain/document/gardenDocument'
+import { nowAsCanonicalTimestamp } from '../domain/schema/canonicalTimestamp'
 import { CANONICAL_FIELD_ORDER } from '../domain/schema/gardenItem'
 import {
   CANONICAL_DIRECTORIES,
@@ -118,7 +119,7 @@ export async function createGarden(
 
     const items = await sampleGardenDrafts({
       nextId: createItemIdFactory(options.entropy),
-      now: options.now ?? (() => new Date().toISOString().replace(/\.\d+Z$/, 'Z')),
+      now: options.now ?? nowAsCanonicalTimestamp,
     })
 
     const planned = planFiles(items)

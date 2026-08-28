@@ -744,11 +744,13 @@ body {
 }
 
 /*
- * Garden Diagnostics (ADR 0052). Marked, never hidden: a person cannot fix what
- * they cannot see, and a file silently ignored looks like a file lost.
+ * The pill toggle shared by the Diagnostics and Garden Activity buttons in the
+ * workspace bar (ticket 12). Garden Diagnostics (ADR 0052) are marked, never
+ * hidden: a person cannot fix what they cannot see, and a file silently
+ * ignored looks like a file lost.
  */
 
-.workspace__diagnostics-toggle {
+.workspace__panel-toggle {
   font-family: var(--metadata);
   font-size: 0.75rem;
   padding: 0.2rem 0.6rem;
@@ -759,12 +761,12 @@ body {
   cursor: pointer;
 }
 
-.workspace__diagnostics-toggle[aria-pressed='true'] {
+.workspace__panel-toggle[aria-pressed='true'] {
   background: var(--mulberry);
   color: var(--canvas);
 }
 
-.workspace__diagnostics-toggle:focus-visible {
+.workspace__panel-toggle:focus-visible {
   outline: 2px solid var(--pollen);
   outline-offset: 2px;
 }
@@ -893,6 +895,102 @@ body {
   font-size: 0.8rem;
   line-height: 1.6;
   color: color-mix(in srgb, var(--bark) 72%, transparent);
+}
+
+/* Human edit, Undo, and Garden Activity (ticket 12, ADR 0041, ADR 0055, ADR 0067) */
+
+.item-panel__actions {
+  display: flex;
+  gap: 0.6rem;
+  margin: 0 0 1.25rem;
+}
+
+.item-panel__evidence-note {
+  margin: 0 0 1.25rem;
+  font-family: var(--control);
+  font-size: 0.85rem;
+  line-height: 1.5;
+  color: color-mix(in srgb, var(--bark) 72%, transparent);
+}
+
+.item-panel__edit-label {
+  display: block;
+  margin: 0 0 0.4rem;
+  font-family: var(--metadata);
+  font-size: 0.7rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--canopy);
+}
+
+.item-panel__editor {
+  width: 100%;
+  box-sizing: border-box;
+  font-family: var(--metadata);
+  font-size: 0.9rem;
+  line-height: 1.55;
+  padding: 0.75rem;
+  border-radius: 4px;
+  border: 1px solid color-mix(in srgb, var(--lichen) 65%, transparent);
+  background: color-mix(in srgb, var(--lichen) 12%, var(--canvas));
+  color: inherit;
+  resize: vertical;
+  margin: 0 0 1rem;
+}
+
+.item-panel__editor:focus-visible {
+  outline: 2px solid var(--pollen);
+  outline-offset: 2px;
+}
+
+.activity {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.activity__entry {
+  padding: 0.9rem 0;
+  border-top: 1px solid color-mix(in srgb, var(--lichen) 50%, transparent);
+}
+
+.activity__summary {
+  margin: 0 0 0.2rem;
+  font-weight: 600;
+}
+
+.activity__action {
+  font-family: var(--control);
+}
+
+.activity__outcome {
+  font-family: var(--metadata);
+  font-size: 0.8em;
+  color: var(--canopy);
+}
+
+.activity__outcome--failure {
+  color: var(--mulberry);
+}
+
+.activity__subjects {
+  margin: 0 0 0.2rem;
+  font-family: var(--control);
+  font-size: 0.9rem;
+}
+
+.activity__time {
+  margin: 0 0 0.3rem;
+  font-family: var(--metadata);
+  font-size: 0.75rem;
+  color: color-mix(in srgb, var(--bark) 72%, transparent);
+}
+
+.activity__detail {
+  margin: 0;
+  font-family: var(--control);
+  font-size: 0.85rem;
+  color: color-mix(in srgb, var(--bark) 82%, transparent);
 }
 
 /* Media Research Garden will not load (ADR 0057) */
