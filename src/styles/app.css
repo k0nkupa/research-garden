@@ -251,6 +251,104 @@ body {
   color: color-mix(in srgb, var(--bark) 75%, transparent);
 }
 
+/*
+ * Search (ticket 11). Functional styling only -- ticket 10 owns the full
+ * visual system; this only needs to be usable and keep the dropdown from
+ * disappearing under the Tree.
+ */
+.workspace__search {
+  position: relative;
+}
+
+.workspace__search-input {
+  font: inherit;
+  font-family: var(--metadata);
+  font-size: 0.8rem;
+  padding: 0.3rem 0.6rem;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--lichen) 65%, transparent);
+  background: var(--canvas);
+  color: var(--bark);
+  width: 16rem;
+  max-width: 40vw;
+}
+
+.workspace__search-input:focus-visible {
+  outline: 2px solid var(--pollen);
+  outline-offset: 2px;
+}
+
+.workspace__search-results {
+  position: absolute;
+  z-index: 1;
+  top: calc(100% + 0.35rem);
+  left: 0;
+  width: max(24rem, 100%);
+  max-width: min(32rem, 80vw);
+  max-height: 60vh;
+  overflow-y: auto;
+  margin: 0;
+  padding: 0.35rem;
+  list-style: none;
+  background: var(--canvas);
+  border: 1px solid color-mix(in srgb, var(--lichen) 55%, transparent);
+  border-radius: 8px;
+  box-shadow: 0 8px 24px color-mix(in srgb, var(--bark) 18%, transparent);
+}
+
+.workspace__search-empty {
+  padding: 0.5rem 0.6rem;
+  font-family: var(--control);
+  font-size: 0.85rem;
+  color: color-mix(in srgb, var(--bark) 60%, transparent);
+}
+
+.workspace__search-result {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.15rem;
+  width: 100%;
+  padding: 0.5rem 0.6rem;
+  border: none;
+  border-radius: 6px;
+  background: none;
+  text-align: left;
+  cursor: pointer;
+}
+
+.workspace__search-result:hover,
+.workspace__search-result:focus-visible {
+  background: color-mix(in srgb, var(--canopy) 10%, transparent);
+}
+
+.workspace__search-result:focus-visible {
+  outline: 2px solid var(--pollen);
+  outline-offset: -2px;
+}
+
+.workspace__search-kind {
+  font-family: var(--metadata);
+  font-size: 0.7rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--canopy);
+}
+
+.workspace__search-title {
+  font-family: var(--control);
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--bark);
+}
+
+.workspace__search-snippet {
+  font-family: var(--reading);
+  font-size: 0.82rem;
+  line-height: 1.4;
+  color: color-mix(in srgb, var(--bark) 70%, transparent);
+}
+
 .workspace__panes {
   display: grid;
   grid-template-columns: 2fr minmax(20rem, 1fr);

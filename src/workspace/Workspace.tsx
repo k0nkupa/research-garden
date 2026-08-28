@@ -4,7 +4,8 @@ import { diagnosticsForItem } from '../garden/mutationGuard'
 import { DiagnosticsPanel } from './DiagnosticsPanel'
 import { GardenTree } from './GardenTree'
 import { ItemPanel } from './ItemPanel'
-import { UNFOCUSED, type TreeViewState } from './treeView'
+import { SearchBox } from './SearchBox'
+import { revealItem, UNFOCUSED, type TreeViewState } from './treeView'
 
 /**
  * The Garden workspace.
@@ -47,12 +48,19 @@ export function Workspace({ garden }: WorkspaceProps) {
   const selectItem = (id: string) => {
     setSelectedId(id)
     setShowingDiagnostics(false)
+    // ticket 11: a result chosen from search (or a Diagnostic) may name an
+    // item the Tree currently has folded away or focused past. Without this,
+    // selecting it would update the panel while the Tree kept showing
+    // something else -- selection would not actually reach the Tree.
+    setView((current) => revealItem(garden.index, current, id))
   }
 
   return (
     <main className="workspace">
       <div className="workspace__bar">
         <span className="workspace__repository">{garden.repositoryName}</span>
+
+        <SearchBox index={garden.index} onSelect={selectItem} />
 
         {view.focusedId !== undefined && (
           <button

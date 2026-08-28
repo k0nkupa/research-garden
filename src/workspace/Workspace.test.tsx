@@ -1164,3 +1164,88 @@ describe('navigating the Tree', () => {
     expect(container.querySelector('[draggable="true"]')).toBeNull()
   })
 })
+
+/**
+ * ticket 11: search is reachable from the workspace, and choosing a result
+ * has to actually select that item into the Tree -- not merely update the
+ * panel beside it while the Tree keeps showing something else.
+ */
+describe('search in the workspace', () => {
+  const B = (n: string) => `branch_01HQ8X2K3M4N5P6Q7R8S9T0${n}W`
+  const Q = (n: string) => `question_leaf_01HQ8X2K3M4N5P6Q7R8S9T0${n}W`
+
+  const TOPIC = B('S1')
+  const DORMANT = B('S2')
+  const NESTED_LEAF = Q('S3')
+
+  const doc = (lines: string[], body = 'A body.') =>
+    ['---', 'schema_version: 1', ...lines, 'created_at: 2026-08-01T10:00:00Z',
+      'updated_at: 2026-08-01T10:00:00Z', '---', '', body, ''].join('\n')
+
+  async function renderSearchable() {
+    const index = await buildGardenIndex([
+      { path: ['branches', 'a.md'], text: doc([`id: ${TOPIC}`, 'kind: branch', 'title: Gradient optimisers', 'state: active']) },
+      {
+        path: ['leaves', 'q.md'],
+        text: doc(
+          [`id: ${NESTED_LEAF}`, 'kind: question_leaf', 'title: Does Adam converge faster', `parent_id: ${TOPIC}`],
+          'Adam converges faster than SGD in most reported cases.',
+        ),
+      },
+      { path: ['branches', 'd.md'], text: doc([`id: ${DORMANT}`, 'kind: branch', 'title: Wintering research', 'state: dormant']) },
+    ])
+    expect(index.diagnostics, JSON.stringify(index.diagnostics)).toEqual([])
+    return render(<Workspace garden={{ repositoryName: 'g', index, fileSystem: emptyRepository() }} />)
+  }
+
+  const searchInput = () => screen.getByRole('combobox', { name: /search the garden/i })
+
+  it('is reachable from the workspace bar', async () => {
+    await renderSearchable()
+
+    expect(screen.getByRole('search')).toBeInTheDocument()
+  })
+
+  it('selects a matching result into the reading panel', async () => {
+    await renderSearchable()
+
+    await userEvent.type(searchInput(), 'Gradient')
+    await userEvent.click(screen.getByRole('option', { name: /Gradient optimisers/ }))
+
+    expect(screen.getByRole('heading', { level: 2, name: 'Gradient optimisers' })).toBeInTheDocument()
+  })
+
+  it('finds a Dormant Branch and selects it into the Tree', async () => {
+    await renderSearchable()
+
+    await userEvent.type(searchInput(), 'Wintering')
+    await userEvent.click(screen.getByRole('option', { name: /Wintering research/ }))
+
+    const dormantNode = screen.getByRole('treeitem', { name: /Wintering research/ })
+    expect(dormantNode).toHaveAttribute('aria-selected', 'true')
+  })
+
+  it('reveals a result nested under a Branch the person had collapsed', async () => {
+    await renderSearchable()
+    // Collapse Topic first, folding the nested question leaf out of the Tree.
+    screen.getByRole('treeitem', { name: /^Branch: Gradient optimisers/ }).focus()
+    await userEvent.keyboard('{ArrowLeft}')
+    expect(screen.queryByRole('treeitem', { name: /Does Adam converge/ })).not.toBeInTheDocument()
+
+    await userEvent.type(searchInput(), 'Does Adam converge')
+    await userEvent.click(screen.getByRole('option', { name: /Does Adam converge/ }))
+
+    // Selecting the search result re-expanded Topic, so the leaf is drawn and
+    // marked as the selection -- not merely opened in the panel beside it.
+    const revealed = screen.getByRole('treeitem', { name: /Does Adam converge/ })
+    expect(revealed).toHaveAttribute('aria-selected', 'true')
+  })
+
+  it('finds a body match and shows a snippet of surrounding text', async () => {
+    await renderSearchable()
+
+    await userEvent.type(searchInput(), 'converges faster')
+
+    expect(screen.getByRole('option')).toHaveTextContent(/converges faster/)
+  })
+})

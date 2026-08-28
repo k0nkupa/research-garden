@@ -162,6 +162,51 @@ export function treeKeyAction(
   }
 }
 
+/**
+ * A view that shows `itemId`, expanding whatever stood between it and what was
+ * already drawn.
+ *
+ * Selecting from outside the Tree -- a search result (ticket 11), a Garden
+ * Diagnostic -- must not leave `selectedId` pointing at a node that never
+ * renders. This expands every collapsed ancestor on the path down to the
+ * item, and drops focus on a different Branch, since a person cannot see
+ * something that focus has narrowed away. It never expands the item itself:
+ * an item is drawn as soon as its *ancestors* are open, and forcing a
+ * Branch's own children open would collapse-then-immediately-reopen the very
+ * thing a person just folded away.
+ *
+ * Ancestry is read from `childIds`, the placement the Tree actually draws
+ * (ADR 0052 keeps a placement-broken item at the top level even though its
+ * frontmatter still names a parent), so this never expands toward a Branch
+ * the Tree would not have nested it under anyway.
+ */
+export function revealItem(index: GardenIndex, view: TreeViewState, itemId: string): TreeViewState {
+  const parentOf = new Map<string, string>()
+  for (const [id, indexed] of index.items) {
+    for (const childId of indexed.childIds) parentOf.set(childId, id)
+  }
+
+  const ancestorIds: string[] = []
+  for (let current = parentOf.get(itemId); current !== undefined; current = parentOf.get(current)) {
+    ancestorIds.push(current)
+  }
+
+  const focusStillCovers =
+    view.focusedId === undefined || view.focusedId === itemId || ancestorIds.includes(view.focusedId)
+
+  const collapsedIds = new Set(view.collapsedIds)
+  let expandedSomething = false
+  for (const ancestorId of ancestorIds) {
+    if (collapsedIds.delete(ancestorId)) expandedSomething = true
+  }
+
+  // Same object when nothing changed, matching every other no-op action here:
+  // a new one invalidates the layout memo and re-walks the whole Tree (ADR 0061).
+  if (focusStillCovers && !expandedSomething) return view
+
+  return { ...view, collapsedIds, focusedId: focusStillCovers ? view.focusedId : undefined }
+}
+
 /** Applies an action to the view state, leaving canonical relationships alone. */
 export function applyTreeAction(view: TreeViewState, action: TreeKeyAction): TreeViewState {
   switch (action.kind) {

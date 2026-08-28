@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { buildGardenIndex, type GardenIndex } from '../domain/index/gardenIndex'
-import { UNFOCUSED, applyTreeAction, visibleTreeRows, treeKeyAction } from './treeView'
+import { UNFOCUSED, applyTreeAction, revealItem, visibleTreeRows, treeKeyAction } from './treeView'
 
 const B = (n: string) => `branch_01HQ8X2K3M4N5P6Q7R8S9T0${n}W`
 const L = (n: string) => `question_leaf_01HQ8X2K3M4N5P6Q7R8S9T0${n}W`
@@ -355,6 +355,75 @@ describe('the keyboard', () => {
 
   it('does nothing at all in an empty Tree', async () => {
     expect(treeKeyAction([], undefined, 'ArrowDown')).toEqual({ kind: 'none' })
+  })
+})
+
+// ticket 11: a search result must actually appear in the Tree, not just
+// update the panel beside it.
+describe('revealing an item selected from outside the Tree', () => {
+  it('expands a collapsed ancestor so the item is drawn', async () => {
+    const index = await garden()
+    const collapsed = { ...UNFOCUSED, collapsedIds: new Set([TOPIC]) }
+
+    const revealed = revealItem(index, collapsed, LEAF_2)
+
+    expect(revealed.collapsedIds.has(TOPIC)).toBe(false)
+    expect(titlesOf(visibleTreeRows(index, revealed))).toContain('Deep leaf')
+  })
+
+  it('expands every collapsed ancestor, not only the nearest one', async () => {
+    const index = await garden()
+    const collapsed = { ...UNFOCUSED, collapsedIds: new Set([TOPIC, NESTED]) }
+
+    const revealed = revealItem(index, collapsed, LEAF_2)
+
+    // The thing that matters is that the item is drawn, not which ids happen
+    // to have left the collapsed set -- so assert what is visible, the same
+    // way the single-ancestor case above does.
+    expect(titlesOf(visibleTreeRows(index, revealed))).toContain('Deep leaf')
+  })
+
+  it('clears focus on a different Branch so the item is not focused away', async () => {
+    const index = await garden()
+    const focusedElsewhere = { ...UNFOCUSED, focusedId: OTHER }
+
+    const revealed = revealItem(index, focusedElsewhere, LEAF)
+
+    expect(revealed.focusedId).toBeUndefined()
+    expect(titlesOf(visibleTreeRows(index, revealed))).toContain('A leaf')
+  })
+
+  it('keeps focus when the item is already inside the focused subtree', async () => {
+    const index = await garden()
+    const focusedOnAncestor = { ...UNFOCUSED, focusedId: TOPIC }
+
+    const revealed = revealItem(index, focusedOnAncestor, LEAF)
+
+    expect(revealed.focusedId).toBe(TOPIC)
+  })
+
+  it('keeps focus when the item is the focused Branch itself', async () => {
+    const index = await garden()
+    const focusedOnTarget = { ...UNFOCUSED, focusedId: TOPIC }
+
+    expect(revealItem(index, focusedOnTarget, TOPIC).focusedId).toBe(TOPIC)
+  })
+
+  it('returns the same view when the item is already visible', async () => {
+    const index = await garden()
+
+    expect(revealItem(index, UNFOCUSED, TOPIC)).toBe(UNFOCUSED)
+  })
+
+  it('does not collapse the item’s own children merely to reveal it', async () => {
+    const index = await garden()
+    const collapsed = { ...UNFOCUSED, collapsedIds: new Set([NESTED]) }
+
+    const revealed = revealItem(index, collapsed, TOPIC)
+
+    // Nothing needed to change: Topic is already visible, and Nested's own
+    // fold is a decision the person made about Nested, not about Topic.
+    expect(revealed).toBe(collapsed)
   })
 })
 
