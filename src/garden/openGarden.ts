@@ -3,8 +3,9 @@ import {
   type GardenFileSystem,
   type GardenPath,
 } from '../filesystem/GardenFileSystem'
-import { buildGardenIndex, type GardenIndex, type ScannedFile } from '../domain/index/gardenIndex'
+import { scanGardenWithCache, type GardenIndex, type ScannedFile } from '../domain/index/gardenIndex'
 import { CANONICAL_DIRECTORIES } from '../domain/schema/itemIdentity'
+import { readIndexCache, writeIndexCache } from './indexCacheStore'
 
 /**
  * The Garden Action layer.
@@ -51,6 +52,15 @@ function isMarkdown(path: GardenPath): boolean {
  * immediately before a mutation -- never on a timer. There is deliberately no
  * separate "rescan" function; one scanning path is what keeps the first open
  * and every later rescan from being able to drift apart.
+ *
+ * An Index Cache (ticket 15, ADR 0062), if one is present and verifies, lets
+ * a large Garden skip reparsing and revalidating files that have not
+ * changed since the last open. It is read before scanning and a fresh one is
+ * written after -- both best-effort: a cache that fails to read is treated
+ * as absent (an uncertain manifest invalidates the whole cache, and this is
+ * simplest way to guarantee that), and a cache that fails to write never
+ * fails an open that already succeeded (ADR 0050: it is derived state, never
+ * a competing authority, so its own persistence is never load-bearing).
  */
 export async function openGarden(fileSystem: GardenFileSystem): Promise<OpenGardenResult> {
   const repositoryName = fileSystem.repositoryName
@@ -60,6 +70,8 @@ export async function openGarden(fileSystem: GardenFileSystem): Promise<OpenGard
       return { kind: 'permission-required', repositoryName }
     }
 
+    const cache = await readIndexCache(fileSystem)
+
     const scanned: ScannedFile[] = []
     for (const directory of CANONICAL_DIRECTORIES) {
       const paths = await fileSystem.listFiles([directory])
@@ -68,9 +80,12 @@ export async function openGarden(fileSystem: GardenFileSystem): Promise<OpenGard
       }
     }
 
+    const scan = await scanGardenWithCache(scanned, cache.entries)
+    await writeIndexCache(fileSystem, scan.cache)
+
     return {
       kind: 'opened',
-      garden: { repositoryName, fileSystem, index: await buildGardenIndex(scanned) },
+      garden: { repositoryName, fileSystem, index: scan.index },
     }
   } catch (error) {
     // Permission can lapse between the check above and any read that follows, so

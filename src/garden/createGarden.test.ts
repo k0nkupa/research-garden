@@ -2,11 +2,27 @@ import { describe, expect, it } from 'vitest'
 import { InMemoryGardenFileSystem } from '../filesystem/InMemoryGardenFileSystem'
 import { parseGardenDocument } from '../domain/document/gardenDocument'
 import { CANONICAL_FIELD_ORDER } from '../domain/schema/gardenItem'
+import { OPERATIONAL_DIRECTORY } from '../domain/schema/itemIdentity'
 import { neighboursOf } from '../domain/index/gardenGraph'
 import type { UlidEntropy } from '../domain/schema/ulid'
 import { createGarden, planFiles } from './createGarden'
 import type { SampleItem } from './sampleGarden'
 import type { OpenedGarden } from './openGarden'
+
+/**
+ * The Sample Garden's own canonical files, excluding whatever `openGarden`
+ * (called at the end of Create Garden to read back what was written) leaves
+ * behind in the operational directory -- the Index Cache (ticket 15), in
+ * particular, which is JSON, not a Garden document, and was never meant to
+ * be covered by assertions about the Sample Garden's own Markdown.
+ */
+function canonicalPaths(snapshot: Record<string, string>): string[] {
+  return Object.keys(snapshot).filter((path) => !path.startsWith(`${OPERATIONAL_DIRECTORY}/`))
+}
+
+function canonicalFiles(snapshot: Record<string, string>): string[] {
+  return canonicalPaths(snapshot).map((path) => snapshot[path] as string)
+}
 
 /** Deterministic, so a created Garden can be compared rather than sampled. */
 function testEntropy(): UlidEntropy {
@@ -82,7 +98,7 @@ describe('where the files land', () => {
   it('writes nothing outside the typed directories', async () => {
     const { fileSystem } = await create()
 
-    for (const path of Object.keys(fileSystem.snapshot())) {
+    for (const path of canonicalPaths(fileSystem.snapshot())) {
       expect(path).toMatch(/^(seeds|roots|branches|leaves|harvests)\//)
     }
   })
@@ -97,7 +113,7 @@ describe('where the files land', () => {
   it('names every file after its title', async () => {
     const { fileSystem } = await create()
 
-    for (const path of Object.keys(fileSystem.snapshot())) {
+    for (const path of canonicalPaths(fileSystem.snapshot())) {
       expect(path).toMatch(/^[a-z]+\/[a-z0-9-]+\.md$/)
     }
   })
@@ -111,7 +127,7 @@ describe('where the files land', () => {
   it('adds no identity suffix when no two titles collide', async () => {
     const { fileSystem } = await create()
 
-    for (const path of Object.keys(fileSystem.snapshot())) {
+    for (const path of canonicalPaths(fileSystem.snapshot())) {
       expect(path).not.toMatch(/-[0-9A-Z]{6}\.md$/)
     }
   })
@@ -132,7 +148,7 @@ describe('what the files look like', () => {
   it('opens every file with its schema version and identity', async () => {
     const { fileSystem } = await create()
 
-    for (const text of Object.values(fileSystem.snapshot())) {
+    for (const text of canonicalFiles(fileSystem.snapshot())) {
       expect(text.startsWith('---\nschema_version: 1\nid: ')).toBe(true)
     }
   })
@@ -140,7 +156,7 @@ describe('what the files look like', () => {
   it('writes files that parse back', async () => {
     const { fileSystem } = await create()
 
-    for (const text of Object.values(fileSystem.snapshot())) {
+    for (const text of canonicalFiles(fileSystem.snapshot())) {
       expect(parseGardenDocument(text).ok).toBe(true)
     }
   })
@@ -148,7 +164,7 @@ describe('what the files look like', () => {
   it('ends every file with exactly one newline', async () => {
     const { fileSystem } = await create()
 
-    for (const text of Object.values(fileSystem.snapshot())) {
+    for (const text of canonicalFiles(fileSystem.snapshot())) {
       expect(text).toMatch(/[^\n]\n$/)
     }
   })
