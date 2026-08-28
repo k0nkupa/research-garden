@@ -1,4 +1,4 @@
-import type { RootItem } from './gardenItem'
+import type { GardenItemKind, RootItem } from './gardenItem'
 
 /**
  * Which parts of a Root may be corrected, and which may not.
@@ -46,4 +46,18 @@ export function rootEvidenceChanges(
 
 export function wouldRewriteRootEvidence(before: RootItem, after: RootItem): boolean {
   return rootEvidenceChanges(before, after).length > 0
+}
+
+/**
+ * Whether a whole-body edit is even worth attempting for this kind.
+ *
+ * A Root's only body-shaped field, `body`, is itself the captured evidence
+ * (`ROOT_EVIDENCE_FIELDS`), so replacing it is always a `rootEvidenceChanges`
+ * violation unless the replacement is byte-identical. Naming that here, once,
+ * keeps the "Roots don't take body edits" rule owned by the module ADR 0012
+ * already assigns it to, rather than re-decided wherever an edit surface
+ * checks a kind (ticket 12).
+ */
+export function isBodyEditableKind(kind: GardenItemKind): kind is Exclude<GardenItemKind, 'root'> {
+  return kind !== 'root'
 }

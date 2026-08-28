@@ -105,6 +105,28 @@ export function setFrontmatterField(
 }
 
 /**
+ * Returns a new document with the body replaced.
+ *
+ * The frontmatter's live YAML is carried over untouched -- comments, unknown
+ * fields, and field order all survive -- so a body-only edit (ticket 12) never
+ * disturbs frontmatter it did not touch. Dropping `originalText` marks the
+ * document as changed, the same way `setFrontmatterField` does.
+ *
+ * Unlike `setFrontmatterField`, the YAML document itself is not cloned here:
+ * this function never mutates it, and `setFrontmatterField` always clones
+ * before it sets a field, so sharing the reference cannot let an edit through
+ * one of these functions leak into a document reached through the other.
+ */
+export function setBody(document: GardenDocument, body: string): GardenDocument {
+  return {
+    frontmatter: document.frontmatter,
+    body,
+    yaml: document.yaml,
+    originalText: undefined,
+  }
+}
+
+/**
  * Writes a brand-new canonical file.
  *
  * ADR 0078 gives new files a documented field order while leaving existing

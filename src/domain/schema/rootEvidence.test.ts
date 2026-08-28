@@ -3,6 +3,7 @@ import type { RootItem } from './gardenItem'
 import {
   ROOT_EVIDENCE_FIELDS,
   ROOT_METADATA_FIELDS,
+  isBodyEditableKind,
   rootEvidenceChanges,
   wouldRewriteRootEvidence,
 } from './rootEvidence'
@@ -109,5 +110,29 @@ describe('the partition itself', () => {
 
   it('leaves the title correctable, since it is a label rather than a record', () => {
     expect([...ROOT_METADATA_FIELDS]).toContain('title')
+  })
+})
+
+// ticket 12: a whole-body edit surface has nowhere honest to send a Root's
+// body, since the body is itself the evidence this module protects.
+describe('whether a kind takes a whole-body edit', () => {
+  it('refuses a Root', () => {
+    expect(isBodyEditableKind('root')).toBe(false)
+  })
+
+  it('permits every other kind', () => {
+    const others: readonly string[] = [
+      'seed',
+      'branch',
+      'claim_leaf',
+      'question_leaf',
+      'idea_leaf',
+      'observation_leaf',
+      'harvest',
+    ]
+
+    for (const kind of others) {
+      expect(isBodyEditableKind(kind as never)).toBe(true)
+    }
   })
 })
