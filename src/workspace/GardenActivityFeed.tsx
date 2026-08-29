@@ -20,6 +20,8 @@ const ACTION_LABELS: Record<GardenActivityAction, string> = {
   undo_change: 'Undo',
   approve_change: 'Approve',
   reject_change: 'Reject',
+  connect_agent: 'Connect',
+  disconnect_agent: 'Disconnect',
 }
 
 function formatTime(at: string): string {
@@ -58,14 +60,16 @@ export function GardenActivityFeed({ entries, titleFor }: GardenActivityFeedProp
                 {entry.outcome === 'success' ? 'succeeded' : 'failed'}
               </span>
             </p>
-            <p className="activity__subjects">
-              {entry.itemIds
-                .map((itemId) => {
-                  const title = titleFor(itemId)
-                  return title ? `${title} (${itemId})` : itemId
-                })
-                .join(', ')}
-            </p>
+            {entry.itemIds.length > 0 && (
+              <p className="activity__subjects">
+                {entry.itemIds
+                  .map((itemId) => {
+                    const title = titleFor(itemId)
+                    return title ? `${title} (${itemId})` : itemId
+                  })
+                  .join(', ')}
+              </p>
+            )}
             <p className="activity__time">{formatTime(entry.at)}</p>
             {entry.detail && <p className="activity__detail">{entry.detail}</p>}
           </li>

@@ -1,8 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import type { AgentInterfaceStatus } from '../capabilities/capabilities'
 import { approveChange, type ApproveChangeResult } from '../garden/approveChange'
 import { editItem, type EditItemResult } from '../garden/editItem'
 import {
   activityForApproveChange,
+  activityForConnectAgent,
+  activityForDisconnectAgent,
   activityForEditItem,
   activityForRejectChange,
   activityForUndoChange,
@@ -27,6 +30,7 @@ import {
 import { nowAsCanonicalTimestamp } from '../domain/schema/canonicalTimestamp'
 import { browserEntropy, createUlidFactory, type UlidEntropy } from '../domain/schema/ulid'
 import type { GardenFileSystem } from '../filesystem/GardenFileSystem'
+import { AgentAccessPanel } from './AgentAccessPanel'
 import { ChangeDiffPanel } from './ChangeDiffPanel'
 import { ChangeTray } from './ChangeTray'
 import { DiagnosticsPanel } from './DiagnosticsPanel'
@@ -58,17 +62,42 @@ import { revealItem, UNFOCUSED, type TreeViewState } from './treeView'
  * notice rather than disturbing what is already on screen; a write's own
  * result, reported separately, is still the authority on whether that write
  * happened.
+ *
+ * `agentAccess` (ticket 17, ADR 0081) is plain `useState`, seeded `false` on
+ * every mount, exactly like `pendingChanges` never reads from anything
+ * persisted -- a Garden opened from a remembered directory handle still
+ * starts every fresh `Workspace` mount in human-only mode, because nothing
+ * here ever stores the flag anywhere it could be read back. Connect shows one
+ * disclosure (ADR 0082) before setting it; Disconnect clears it immediately
+ * and states plainly what it cannot undo (ADR 0083). Ticket 17 registers no
+ * filesystem-backed tool of its own -- there are none yet -- so today this
+ * flag has no tool registry to gate; it exists so ticket 18 onward has a
+ * session-scoped signal already wired to Connect/Disconnect and Garden
+ * Activity to gate against.
  */
 export interface WorkspaceProps {
   readonly garden: OpenedGarden
+  /**
+   * Whether ChatGPT can currently reach this browser through WebMCP (ADR
+   * 0059/0072) -- distinct from `agentAccess`, which is the person's own
+   * choice to connect. Defaults to `'available'` so existing callers (tests,
+   * mainly) that do not care about this gate see Connect ChatGPT enabled, as
+   * they did before this prop existed.
+   */
+  readonly agentInterface?: AgentInterfaceStatus | undefined
   /** Injected rather than reached for, matching `editItem`/`ulid.ts` (ADR 0077). */
   readonly now?: (() => string) | undefined
   readonly entropy?: UlidEntropy | undefined
 }
 
-type PanelMode = 'item' | 'diagnostics' | 'activity' | 'change'
+type PanelMode = 'item' | 'diagnostics' | 'activity' | 'change' | 'connect'
 
-export function Workspace({ garden: initialGarden, now, entropy }: WorkspaceProps) {
+export function Workspace({
+  garden: initialGarden,
+  agentInterface = 'available',
+  now,
+  entropy,
+}: WorkspaceProps) {
   const [garden, setGarden] = useState<OpenedGarden>(initialGarden)
   const [selectedId, setSelectedId] = useState<string | undefined>(undefined)
   const [panelMode, setPanelMode] = useState<PanelMode>('item')
@@ -92,6 +121,9 @@ export function Workspace({ garden: initialGarden, now, entropy }: WorkspaceProp
   /** Recomputed alongside `pendingChanges`, from each record's own current-hash check. */
   const [staleChangeIds, setStaleChangeIds] = useState<ReadonlySet<string>>(new Set())
   const [selectedChangeId, setSelectedChangeId] = useState<string | undefined>(undefined)
+  const [agentAccess, setAgentAccess] = useState(false)
+  /** True for one render right after Disconnect, so the panel can say what it cannot undo. */
+  const [justDisconnected, setJustDisconnected] = useState(false)
 
   const clock = useCallback(() => (now ?? nowAsCanonicalTimestamp)(), [now])
   const nextActivityId = useMemo(() => createUlidFactory(entropy ?? browserEntropy), [entropy])
@@ -326,6 +358,37 @@ export function Workspace({ garden: initialGarden, now, entropy }: WorkspaceProp
     [clock, garden.fileSystem, nextActivityId, refreshPendingChanges, selectedChangeId],
   )
 
+  /** Opens the disclosure, fresh -- not a stale Disconnected notice from earlier this session. */
+  const openAgentAccessPanel = useCallback(() => {
+    setJustDisconnected(false)
+    setPanelMode('connect')
+  }, [])
+
+  const connectAgent = useCallback(() => {
+    setAgentAccess(true)
+    setActivity((log) => recordGardenActivity(log, activityForConnectAgent(nextActivityId(), clock())))
+    setPanelMode('item')
+  }, [clock, nextActivityId])
+
+  /**
+   * Immediate, not gated behind a second confirmation (ADR 0083): revoking
+   * access should never itself be friction. `justDisconnected` sets what the
+   * panel says right afterward -- Connect's own disclosure is the one place
+   * requiring an explicit step; Disconnect only has to be undeniable once it
+   * has happened.
+   */
+  const disconnectAgent = useCallback(() => {
+    setAgentAccess(false)
+    setJustDisconnected(true)
+    setActivity((log) => recordGardenActivity(log, activityForDisconnectAgent(nextActivityId(), clock())))
+    setPanelMode('connect')
+  }, [clock, nextActivityId])
+
+  const closeAgentAccessPanel = useCallback(() => {
+    setJustDisconnected(false)
+    setPanelMode('item')
+  }, [])
+
   return (
     <main className="workspace">
       <div className="workspace__bar">
@@ -379,6 +442,23 @@ export function Workspace({ garden: initialGarden, now, entropy }: WorkspaceProp
             }}
           >
             {pendingChanges.length} {pendingChanges.length === 1 ? 'Change' : 'Changes'}
+          </button>
+        )}
+
+        {agentInterface !== 'unsupported' && (
+          <button
+            type="button"
+            className="workspace__panel-toggle"
+            aria-pressed={agentAccess}
+            disabled={!agentAccess && agentInterface === 'offline'}
+            title={
+              !agentAccess && agentInterface === 'offline'
+                ? 'No connection right now — Agent Access needs the host connection to work.'
+                : undefined
+            }
+            onClick={() => (agentAccess ? disconnectAgent() : openAgentAccessPanel())}
+          >
+            {agentAccess ? 'Disconnect ChatGPT' : 'Connect ChatGPT'}
           </button>
         )}
 
@@ -437,6 +517,14 @@ export function Workspace({ garden: initialGarden, now, entropy }: WorkspaceProp
             titleFor={titleForItem}
             onApprove={approveSelectedChange}
             onReject={rejectSelectedChange}
+          />
+        )}
+
+        {panelMode === 'connect' && (
+          <AgentAccessPanel
+            justDisconnected={justDisconnected}
+            onConnect={connectAgent}
+            onClose={closeAgentAccessPanel}
           />
         )}
 

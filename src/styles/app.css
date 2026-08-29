@@ -771,6 +771,11 @@ body {
   outline-offset: 2px;
 }
 
+.workspace__panel-toggle:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
 /*
  * Refresh (ADR 0053, ticket 13) shares `.workspace__panel-toggle`'s pill
  * geometry in the markup (both classes on one element) rather than repeating

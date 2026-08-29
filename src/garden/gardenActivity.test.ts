@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest'
 import type { EditItemResult } from './editItem'
 import type { UndoChangeResult } from './undoChange'
 import {
+  activityForConnectAgent,
+  activityForDisconnectAgent,
   activityForEditItem,
   activityForUndoChange,
   recordGardenActivity,
@@ -97,6 +99,36 @@ describe('an entry for a refused Undo', () => {
 
     expect(entry.outcome).toBe('failure')
     expect(entry.detail).toBe('This item changed again after the edit Undo would revert.')
+  })
+})
+
+describe('an entry for connecting the agent', () => {
+  it('always reports success, naming no specific item', () => {
+    const entry = activityForConnectAgent('entry-5', AT)
+
+    expect(entry).toEqual({
+      id: 'entry-5',
+      action: 'connect_agent',
+      at: AT,
+      itemIds: [],
+      outcome: 'success',
+      detail: undefined,
+    })
+  })
+})
+
+describe('an entry for disconnecting the agent', () => {
+  it('always reports success, naming no specific item', () => {
+    const entry = activityForDisconnectAgent('entry-6', AT)
+
+    expect(entry).toEqual({
+      id: 'entry-6',
+      action: 'disconnect_agent',
+      at: AT,
+      itemIds: [],
+      outcome: 'success',
+      detail: undefined,
+    })
   })
 })
 

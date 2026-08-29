@@ -1,7 +1,7 @@
 /**
  * @vitest-environment jsdom
  */
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { act, render, screen } from '@testing-library/react'
 import { App } from './App'
 
@@ -17,8 +17,11 @@ function grantLocalFolderAccess() {
   })
 }
 
-function grantWebMcp() {
-  Object.defineProperty(navigator, 'modelContext', { value: {}, configurable: true })
+function grantWebMcp(registerTool?: (tool: unknown, options?: unknown) => Promise<undefined>) {
+  Object.defineProperty(navigator, 'modelContext', {
+    value: registerTool ? { registerTool } : {},
+    configurable: true,
+  })
 }
 
 function setOnLine(value: boolean) {
@@ -104,5 +107,38 @@ describe('App', () => {
       window.dispatchEvent(new Event('online'))
     })
     expect(screen.queryByRole('status')).not.toBeInTheDocument()
+  })
+
+  // ADR 0035, ticket 17: the one tool WebMCP always exposes, independent of
+  // whether a Garden is open or Agent Access is on.
+  it('registers describe_research_garden through WebMCP as soon as it mounts', () => {
+    const registerTool = vi.fn().mockResolvedValue(undefined)
+    setViewport(1440, 900)
+    grantWebMcp(registerTool)
+
+    render(<App />)
+
+    expect(registerTool).toHaveBeenCalledTimes(1)
+    const [tool] = registerTool.mock.calls[0] as [{ name: string }]
+    expect(tool.name).toBe('describe_research_garden')
+  })
+
+  it('registers it before any Garden is open and without local folder access', () => {
+    const registerTool = vi.fn().mockResolvedValue(undefined)
+    setViewport(1440, 900)
+    grantWebMcp(registerTool)
+    // Deliberately no grantLocalFolderAccess(): this browser cannot open a
+    // Garden at all, and the description tool must still be there.
+
+    render(<App />)
+
+    expect(registerTool).toHaveBeenCalledTimes(1)
+  })
+
+  it('registers nothing when WebMCP is not present', () => {
+    setViewport(1440, 900)
+    grantLocalFolderAccess()
+
+    expect(() => render(<App />)).not.toThrow()
   })
 })

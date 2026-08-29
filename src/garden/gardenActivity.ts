@@ -16,7 +16,13 @@ import { describeUndoChangeFailure, type UndoChangeResult } from './undoChange'
  * and `undoChange.ts`, which deliberately never surface `error.message`).
  */
 
-export type GardenActivityAction = 'edit_item' | 'undo_change' | 'approve_change' | 'reject_change'
+export type GardenActivityAction =
+  | 'edit_item'
+  | 'undo_change'
+  | 'approve_change'
+  | 'reject_change'
+  | 'connect_agent'
+  | 'disconnect_agent'
 export type GardenActivityOutcome = 'success' | 'failure'
 
 export interface GardenActivityEntry {
@@ -101,4 +107,18 @@ export function activityForRejectChange(
     outcome: result.kind === 'rejected' ? 'success' : 'failure',
     detail: describeRejectChangeFailure(result),
   }
+}
+
+/**
+ * Connect and Disconnect (ticket 17) are local state flips, not Garden
+ * Actions that can be refused -- there is no `ConnectAgentResult` to
+ * describe a failure from, so unlike every action above, these two always
+ * report success and name no affected item.
+ */
+export function activityForConnectAgent(id: string, at: string): GardenActivityEntry {
+  return { id, action: 'connect_agent', at, itemIds: [], outcome: 'success', detail: undefined }
+}
+
+export function activityForDisconnectAgent(id: string, at: string): GardenActivityEntry {
+  return { id, action: 'disconnect_agent', at, itemIds: [], outcome: 'success', detail: undefined }
 }
