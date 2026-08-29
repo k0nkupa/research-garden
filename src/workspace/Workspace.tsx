@@ -30,6 +30,7 @@ import {
 import { nowAsCanonicalTimestamp } from '../domain/schema/canonicalTimestamp'
 import { browserEntropy, createUlidFactory, type UlidEntropy } from '../domain/schema/ulid'
 import type { GardenFileSystem } from '../filesystem/GardenFileSystem'
+import { registerCoreReadTools } from '../webmcp/coreReadTools'
 import { AgentAccessPanel } from './AgentAccessPanel'
 import { ChangeDiffPanel } from './ChangeDiffPanel'
 import { ChangeTray } from './ChangeTray'
@@ -124,6 +125,17 @@ export function Workspace({
   const [agentAccess, setAgentAccess] = useState(false)
   /** True for one render right after Disconnect, so the panel can say what it cannot undo. */
   const [justDisconnected, setJustDisconnected] = useState(false)
+  /**
+   * The core read tools (ticket 18) are registered once per Agent Access
+   * session, not re-registered on every rescan -- so their `execute` reads
+   * the Garden through this ref rather than closing over whatever `garden`
+   * was current when registration ran. A WebMCP call can land long after a
+   * rescan replaced it.
+   */
+  const gardenRef = useRef(garden)
+  useEffect(() => {
+    gardenRef.current = garden
+  }, [garden])
 
   const clock = useCallback(() => (now ?? nowAsCanonicalTimestamp)(), [now])
   const nextActivityId = useMemo(() => createUlidFactory(entropy ?? browserEntropy), [entropy])
@@ -240,6 +252,29 @@ export function Workspace({
     window.addEventListener('focus', onFocus)
     return () => window.removeEventListener('focus', onFocus)
   }, [rescanGarden])
+
+  // Ticket 18: `inspect_garden`/`search_garden`/`read_items`/`audit_garden`
+  // are registered only while Agent Access is on, for exactly the current
+  // Agent Access session -- the same on/off gate `agentAccess` itself already
+  // is (ADR 0081), not a state-aware bundle (that finer-grained mechanism is
+  // ticket 19's). One `AbortSignal` covers all four, so Disconnect's abort
+  // unregisters them together (ADR 0083).
+  useEffect(() => {
+    if (!agentAccess) return
+
+    const controller = new AbortController()
+    void registerCoreReadTools(
+      window.navigator,
+      {
+        getGarden: () => gardenRef.current,
+        recordActivity: (entry) => setActivity((log) => recordGardenActivity(log, entry)),
+        nextActivityId,
+        clock,
+      },
+      controller.signal,
+    )
+    return () => controller.abort()
+  }, [agentAccess, clock, nextActivityId])
 
   const saveEdit = useCallback(
     async (itemId: string, baseText: string, newBody: string): Promise<EditItemResult> => {

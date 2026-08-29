@@ -14,6 +14,13 @@ import { describeUndoChangeFailure, type UndoChangeResult } from './undoChange'
  * refusal messages -- never from a caught error's own message, which is where
  * file content could otherwise leak in (see the `catch` blocks in `editItem.ts`
  * and `undoChange.ts`, which deliberately never surface `error.message`).
+ *
+ * `inspect_garden`/`search_garden`/`read_items`/`audit_garden` (ticket 18)
+ * have no `activityForX` builder here, unlike every action above: their
+ * entries are built directly in `readTool.ts`'s `createReadTool`, from the
+ * common WebMCP result envelope every one of them already returns, rather
+ * than from a bespoke per-action result union each `describeXFailure` would
+ * otherwise exist only to unwrap.
  */
 
 export type GardenActivityAction =
@@ -23,6 +30,10 @@ export type GardenActivityAction =
   | 'reject_change'
   | 'connect_agent'
   | 'disconnect_agent'
+  | 'inspect_garden'
+  | 'search_garden'
+  | 'read_items'
+  | 'audit_garden'
 export type GardenActivityOutcome = 'success' | 'failure'
 
 export interface GardenActivityEntry {

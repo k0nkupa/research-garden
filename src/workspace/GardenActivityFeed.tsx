@@ -22,6 +22,10 @@ const ACTION_LABELS: Record<GardenActivityAction, string> = {
   reject_change: 'Reject',
   connect_agent: 'Connect',
   disconnect_agent: 'Disconnect',
+  inspect_garden: 'Inspect',
+  search_garden: 'Search',
+  read_items: 'Read',
+  audit_garden: 'Audit',
 }
 
 function formatTime(at: string): string {
