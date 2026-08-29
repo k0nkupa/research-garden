@@ -2,7 +2,7 @@
 
 Spec: `spec.md`
 Tickets: `issues/`
-Triage: every ticket is `ready-for-agent`
+Triage: each ticket's current status is recorded in its issue file.
 
 The **frontier** is the first open, unblocked, unclaimed ticket. Ticket 01 has no
 blockers; everything else waits on the edges below. Claim a ticket by setting

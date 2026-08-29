@@ -8,6 +8,7 @@ import { buildGardenIndex } from '../domain/index/gardenIndex'
 import type { UlidEntropy } from '../domain/schema/ulid'
 import { InMemoryGardenFileSystem } from '../filesystem/InMemoryGardenFileSystem'
 import { proposeChange } from '../garden/proposeChange'
+import { proposeHarvest } from '../garden/proposalTools'
 import { Workspace } from './Workspace'
 
 /**
@@ -35,6 +36,7 @@ function countingEntropy(startAt = 1_700_000_000_000): UlidEntropy {
 }
 
 const BRANCH = 'branch_01HQ8X2K3M4N5P6Q7R8S9T0V1W'
+const ROOT = 'root_01HQ8X2K3M4N5P6Q7R8S9T0R1W'
 const CREATED = '2026-08-01T10:00:00Z'
 
 const branchFile = `---
@@ -48,6 +50,20 @@ updated_at: ${CREATED}
 ---
 
 Original body text.
+`
+
+const rootFile = `---
+schema_version: 1
+id: ${ROOT}
+kind: root
+title: Captured evidence
+captured_at: ${CREATED}
+content_hash: sha256:captured
+created_at: ${CREATED}
+updated_at: ${CREATED}
+---
+
+Exact captured evidence.
 `
 
 async function renderOpenWorkspace(
@@ -154,6 +170,28 @@ describe('opening a change', () => {
 })
 
 describe('approving a change', () => {
+  it('shows a new Harvest proposal as reviewable and applies it from the real Change Tray', async () => {
+    const files = { 'branches/attention.md': branchFile, 'roots/evidence.md': rootFile }
+    const fileSystem = new InMemoryGardenFileSystem(files, 'my-garden')
+    const index = await buildGardenIndex(Object.entries(files).map(([path, text]) => ({ path: path.split('/'), text })))
+    const proposed = await proposeHarvest(fileSystem, {
+      title: 'A Harvest', parentId: BRANCH, supportedBy: [ROOT],
+      question: 'Question', synthesis: 'Synthesis', evidence: 'Evidence',
+      contradictionsAndUncertainty: 'No contradiction was identified; uncertainty is explicit.', openQuestions: 'Open',
+    }, { now: () => CREATED, entropy: countingEntropy() })
+    if (proposed.kind !== 'proposed') throw new Error(`expected Harvest proposal, got ${proposed.kind}`)
+
+    render(<Workspace garden={{ repositoryName: 'my-garden', index, fileSystem }} />)
+    await waitFor(() => screen.getByRole('region', { name: /change tray/i }))
+    expect(screen.getByText(/A Harvest/)).toBeInTheDocument()
+    expect(screen.queryByText(/stale/i)).not.toBeInTheDocument()
+
+    await userEvent.click(screen.getByRole('button', { name: /A Harvest/i }))
+    await userEvent.click(screen.getByRole('button', { name: /^approve$/i }))
+    await waitFor(() => expect(Object.keys(fileSystem.snapshot()).some((path) => path.startsWith('harvests/'))).toBe(true))
+    await waitFor(() => expect(screen.getByText(/no changes to review/i)).toBeInTheDocument())
+  })
+
   it('writes the file and removes the change from the tray', async () => {
     const { fileSystem, index } = await renderOpenWorkspace({ 'branches/attention.md': branchFile })
     await proposeAgainst(fileSystem, index, 'A proposed replacement body.')

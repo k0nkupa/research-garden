@@ -4,7 +4,7 @@
 
 **Blocked by:** 19, 20
 
-**Status:** ready-for-agent
+**Status:** resolved
 
 - [ ] Propose relation creates a Pending Change adding one recognized relationship, with an exact one-file preview
 - [ ] Propose move creates a Pending Change reparenting one item, with an exact one-file preview
@@ -23,3 +23,12 @@
 
 - [ ] `ensureMutable` refuses a proposal whose target carries a Garden Diagnostic
       (ADR 0052)
+
+## Answer
+
+Implemented relation, move, and Harvest WebMCP proposal tools with exact
+one-file Pending Changes, contradiction-aware Harvest validation, human Change
+Tray lifecycle coverage, and absent-target race protection. Focused proposal,
+Pending Change, and approval suites plus typecheck and production build passed.
+The full Vitest suite was attempted twice but blocked by host fork-worker
+startup timeouts before the affected jsdom files loaded.

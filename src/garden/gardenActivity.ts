@@ -43,6 +43,9 @@ export type GardenActivityAction =
   | 'find_contradictions'
   | 'prepare_source_comparison'
   | 'prepare_seed_cultivation'
+  | 'propose_relation'
+  | 'propose_move'
+  | 'propose_harvest'
 export type GardenActivityOutcome = 'success' | 'failure'
 
 export interface GardenActivityEntry {

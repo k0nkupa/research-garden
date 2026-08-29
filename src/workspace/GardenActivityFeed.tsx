@@ -35,6 +35,9 @@ const ACTION_LABELS: Record<GardenActivityAction, string> = {
   find_contradictions: 'Find Contradictions',
   prepare_source_comparison: 'Prepare Source Comparison',
   prepare_seed_cultivation: 'Prepare Seed Cultivation',
+  propose_relation: 'Propose Relation',
+  propose_move: 'Propose Move',
+  propose_harvest: 'Propose Harvest',
 }
 
 function formatTime(at: string): string {

@@ -8,6 +8,7 @@ import {
   pendingChangePath,
   readPendingChange,
   writePendingChange,
+  type PendingChangeRecord,
 } from './pendingChange'
 
 const RECORD = {
@@ -181,6 +182,41 @@ describe('listing every currently proposed change', () => {
     // The operational listing must never reach into canonical directories.
     const canonicalListing = await fileSystem.listFiles(['branches'])
     expect(canonicalListing.map((path) => path.join('/'))).toEqual(['branches/attention.md'])
+  })
+})
+
+describe('new-file Harvest proposals', () => {
+  it('does not mark an absent Harvest target stale before approval', async () => {
+    const fileSystem = new InMemoryGardenFileSystem({}, 'my-garden')
+    const record: PendingChangeRecord = {
+      ...RECORD,
+      id: 'harvest-proposal',
+      itemId: 'harvest_01HQ8X2K3M4N5P6Q7R8S9T0H1W',
+      path: ['harvests', 'a-synthesis.md'],
+      baseText: '',
+      baseHash: await contentHash(''),
+      baseState: 'absent' as const,
+    }
+    expect(await isPendingChangeStale(fileSystem, record)).toBe(false)
+  })
+
+  it('still marks a missing existing-item target stale', async () => {
+    const fileSystem = new InMemoryGardenFileSystem({}, 'my-garden')
+    expect(await isPendingChangeStale(fileSystem, RECORD)).toBe(true)
+  })
+
+  it('marks an explicitly absent Harvest stale when even an empty target file appears', async () => {
+    const fileSystem = new InMemoryGardenFileSystem({ 'harvests/a-synthesis.md': '' }, 'my-garden')
+    const record: PendingChangeRecord = {
+      ...RECORD,
+      id: 'harvest-proposal-empty-race',
+      itemId: 'harvest_01HQ8X2K3M4N5P6Q7R8S9T0H1W',
+      path: ['harvests', 'a-synthesis.md'],
+      baseText: '',
+      baseHash: await contentHash(''),
+      baseState: 'absent',
+    }
+    expect(await isPendingChangeStale(fileSystem, record)).toBe(true)
   })
 })
 

@@ -64,6 +64,7 @@ export async function proposeChange(
       path: indexed.path,
       baseText: currentText,
       baseHash: currentHash,
+      baseState: 'present',
       previewText: newText,
       previewHash: resultingHash,
       proposedAt,
@@ -101,3 +102,21 @@ export function describeProposeChangeFailure(result: ProposeChangeResult): strin
       return result.message
   }
 }
+
+// Ticket 22 keeps the existing body-edit action intact while exposing the
+// three structural proposal actions from a discoverable proposal module.
+export {
+  proposeHarvest,
+  proposeHarvestInputSchema,
+  proposeMove,
+  proposeMoveInputSchema,
+  proposeRelation,
+  proposeRelationInputSchema,
+} from './proposalTools'
+export type {
+  ProposeHarvestInput,
+  ProposeMoveInput,
+  ProposeRelationInput,
+  ProposalOptions,
+  ProposalResult,
+} from './proposalTools'

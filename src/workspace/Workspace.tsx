@@ -33,6 +33,7 @@ import type { GardenFileSystem } from '../filesystem/GardenFileSystem'
 import { createCoreReadToolsBundle } from '../webmcp/coreReadTools'
 import { createDirectAdditionToolsBundle } from '../webmcp/directAdditionTools'
 import { createResearchToolsBundles } from '../webmcp/researchTools'
+import { createProposalToolsBundles } from '../webmcp/proposalTools'
 import {
   createStateAwareToolRegistration,
   type ToolRegistrationState,
@@ -288,6 +289,7 @@ export function Workspace({
         createCoreReadToolsBundle(coreRuntime),
         createDirectAdditionToolsBundle(additionsRuntime),
         ...createResearchToolsBundles(coreRuntime),
+        ...createProposalToolsBundles(additionsRuntime),
       ])
     },
     [clock, entropy, nextActivityId],

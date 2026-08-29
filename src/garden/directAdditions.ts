@@ -16,6 +16,7 @@ import { createItemIdFactory, createUlidFactory, browserEntropy, type UlidEntrop
 import { GardenFileSystemError, type GardenFileSystem, type GardenPath } from '../filesystem/GardenFileSystem'
 import { scanCanonicalFiles } from './openGarden'
 import { ensureMutable } from './mutationGuard'
+import { diagnosticMessageForItem } from './diagnosticMessage'
 import { writeUndoSnapshot } from './undoSnapshot'
 import { writeAndVerify } from './verifiedWrite'
 
@@ -74,13 +75,6 @@ export type DirectAdditionResult =
 
 const GENERIC_FAILURE_MESSAGE =
   'The addition could not be completed. Check that the Garden Repository is still available and try again.'
-
-/** A short diagnostic summary suitable for a structured tool error. */
-function invalidItemMessage(index: GardenIndex, itemId: string): string | undefined {
-  const diagnostic = index.diagnostics.find((entry) => entry.itemId === itemId)
-  if (!diagnostic) return undefined
-  return diagnostic.problems.map((problem) => `${problem.field} ${problem.message}`).join('; ')
-}
 
 async function freshIndex(fileSystem: GardenFileSystem): Promise<{ index: GardenIndex; files: Awaited<ReturnType<typeof scanCanonicalFiles>> }> {
   const files = await scanCanonicalFiles(fileSystem)
@@ -150,7 +144,7 @@ async function applyAddition(
   if (!candidateItem) {
     return { kind: 'invalid', message: 'The new item did not pass Garden schema and graph validation.' }
   }
-  const candidateProblem = invalidItemMessage(candidate, draft.id)
+  const candidateProblem = diagnosticMessageForItem(candidate, draft.id)
   if (candidateProblem) {
     return { kind: 'invalid', message: `The new item is invalid: ${candidateProblem}` }
   }
@@ -184,7 +178,7 @@ async function applyAddition(
 
   const after = await freshIndex(fileSystem)
   const afterItem = after.index.items.get(draft.id)
-  const afterProblem = invalidItemMessage(after.index, draft.id)
+  const afterProblem = diagnosticMessageForItem(after.index, draft.id)
   if (!afterItem || afterProblem) {
     return {
       kind: 'verification-failed',

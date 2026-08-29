@@ -5,7 +5,7 @@ import { CANONICAL_DIRECTORIES } from '../domain/schema/itemIdentity'
 import { createUlidFactory, browserEntropy, type UlidEntropy } from '../domain/schema/ulid'
 import { GardenFileSystemError, type GardenFileSystem, type GardenPath } from '../filesystem/GardenFileSystem'
 import { diagnosticsForItem } from './mutationGuard'
-import { deletePendingChange, readPendingChange } from './pendingChange'
+import { deletePendingChange, isAbsentPendingChange, readPendingChange } from './pendingChange'
 import { scanCanonicalFiles } from './openGarden'
 import { writeUndoSnapshot } from './undoSnapshot'
 import { writeAndVerify } from './verifiedWrite'
@@ -113,14 +113,25 @@ export async function approveChange(
     const targetKey = record.path.join('/')
     const currentFile = scanned.find((file) => file.path.join('/') === targetKey)
 
-    if (!currentFile) {
+    // A Harvest proposal is the one MVP action whose exact one-file preview
+    // creates a new canonical file. Its empty base is represented by the hash
+    // of an empty string; every other missing target remains stale.
+    const emptyHash = await contentHash('')
+    if (!currentFile && (record.baseHash !== emptyHash || !isAbsentPendingChange(record))) {
       return {
         kind: 'stale',
         message: 'The item this change targets no longer exists. Reopen the Garden to see its current state.',
       }
     }
 
-    const currentHash = await contentHash(currentFile.text)
+    const currentText = currentFile?.text ?? ''
+    if (currentFile && isAbsentPendingChange(record)) {
+      return {
+        kind: 'stale',
+        message: 'A file now exists at this new Harvest location, so approving it was refused to avoid overwriting that newer change.',
+      }
+    }
+    const currentHash = await contentHash(currentText)
     if (currentHash !== record.baseHash) {
       return {
         kind: 'stale',
@@ -131,9 +142,11 @@ export async function approveChange(
 
     // Schema and graph invariants (ADR 0079): the whole current Garden, with
     // only this one file's text replaced by what approving would write.
-    const substituted = scanned.map((file) =>
-      file.path.join('/') === targetKey ? { path: file.path, text: record.previewText } : file,
-    )
+    const substituted = currentFile
+      ? scanned.map((file) =>
+          file.path.join('/') === targetKey ? { path: file.path, text: record.previewText } : file,
+        )
+      : [...scanned, { path: record.path, text: record.previewText }]
     const revalidated = await buildGardenIndex(substituted)
     const problems = diagnosticsForItem(revalidated, record.itemId)
     if (!revalidated.items.has(record.itemId) || problems.length > 0) {
@@ -150,16 +163,27 @@ export async function approveChange(
     // Snapshot before the write, exactly as `editItem` does, so the
     // pre-approval content is recoverable even if the write itself fails
     // partway (ADR 0055).
-    await writeUndoSnapshot(fileSystem, {
-      id: snapshotId,
-      itemId: record.itemId,
-      path: record.path,
-      previousState: 'present',
-      previousText: currentFile.text,
-      previousHash: currentHash,
-      resultingHash: record.previewHash,
-      appliedAt: now,
-    })
+    await writeUndoSnapshot(fileSystem, currentFile
+      ? {
+          id: snapshotId,
+          itemId: record.itemId,
+          path: record.path,
+          previousState: 'present',
+          previousText: currentText,
+          previousHash: currentHash,
+          resultingHash: record.previewHash,
+          appliedAt: now,
+        }
+      : {
+          id: snapshotId,
+          itemId: record.itemId,
+          path: record.path,
+          previousState: 'absent',
+          previousText: '',
+          previousHash: currentHash,
+          resultingHash: record.previewHash,
+          appliedAt: now,
+        })
 
     const verified = await writeAndVerify(fileSystem, record.path, record.previewText)
     if (verified.kind === 'verification-failed') return verified

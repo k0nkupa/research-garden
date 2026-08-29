@@ -29,7 +29,7 @@ import {
  * asked to name the hash it inspected, and a mismatch is refused rather
  * than trusted (ADR 0025).
  */
-export interface PendingChangeRecord {
+interface PendingChangeFields {
   readonly id: string
   readonly itemId: string
   readonly path: GardenPath
@@ -38,6 +38,27 @@ export interface PendingChangeRecord {
   readonly previewText: string
   readonly previewHash: string
   readonly proposedAt: string
+}
+
+/**
+ * Existing-file proposals are the legacy default when `baseState` is absent;
+ * new records state their target existence explicitly. The absent variant is
+ * intentionally constrained to an empty base, making an invalid new-file
+ * record unrepresentable at the action seam.
+ */
+export type PendingChangeRecord = PendingChangeFields & (
+  | { readonly baseState: 'present' }
+  | { readonly baseState: 'absent'; readonly baseText: '' }
+  | { readonly baseState?: undefined }
+)
+
+/** Legacy records omitted `baseState`; absence is never inferred from empty text. */
+export function pendingChangeBaseState(record: PendingChangeRecord): 'present' | 'absent' {
+  return record.baseState === 'absent' ? 'absent' : 'present'
+}
+
+export function isAbsentPendingChange(record: PendingChangeRecord): boolean {
+  return pendingChangeBaseState(record) === 'absent' && record.baseText === '' && record.path[0] === 'harvests' && record.itemId.startsWith('harvest_')
 }
 
 const PENDING_DIRECTORY = 'pending'
@@ -70,7 +91,9 @@ const STRING_FIELDS = [
 ] as const
 
 function isPendingChangeRecord(value: unknown): value is PendingChangeRecord {
-  return isOperationalRecordShape(value, STRING_FIELDS)
+  if (!isOperationalRecordShape(value, STRING_FIELDS)) return false
+  const record = value as Record<string, unknown>
+  return record.baseState === undefined || record.baseState === 'present' || (record.baseState === 'absent' && record.baseText === '')
 }
 
 /** `undefined` when no change exists at that id, or what is there is not one. */
@@ -114,10 +137,19 @@ export async function isPendingChangeStale(
   try {
     currentText = await fileSystem.read(record.path)
   } catch (error) {
-    // Gone entirely is the clearest kind of stale.
-    if (error instanceof GardenFileSystemError && error.code === 'not-found') return true
+    // A Harvest proposal intentionally targets a file that does not exist yet.
+    // Its empty base is the explicit new-file state; all other missing targets
+    // remain stale as before.
+    if (error instanceof GardenFileSystemError && error.code === 'not-found') {
+      return !isAbsentPendingChange(record) || record.baseHash !== await contentHash('')
+    }
     throw error
   }
+
+  // An explicitly absent target is a create-if-absent proposal. Even an empty
+  // file at its path is a concurrent write and must not be overwritten merely
+  // because its content hash happens to equal the empty base hash.
+  if (isAbsentPendingChange(record)) return true
 
   return (await contentHash(currentText)) !== record.baseHash
 }
