@@ -49,6 +49,7 @@ const EMPTY: ToolRegistrationState = {
   agentAccess: false,
   gardenOpen: false,
   selectedItemId: undefined,
+  selectedItemKind: undefined,
   focusedBranchId: undefined,
   hasPendingChanges: false,
 }
@@ -123,6 +124,7 @@ describe('state-aware WebMCP registration lifecycle', () => {
       agentAccess: true,
       gardenOpen: true,
       selectedItemId: 'leaf-1',
+      selectedItemKind: undefined,
       focusedBranchId: 'branch-1',
       hasPendingChanges: true,
     })

@@ -4,7 +4,7 @@
 
 **Blocked by:** 19
 
-**Status:** ready-for-agent
+**Status:** resolved
 
 - [ ] Explore Branch returns the structure and contents of one Branch within read bounds
 - [ ] Trace evidence returns the complete provenance and evidence path for an item back to its Roots
@@ -16,3 +16,9 @@
 - [ ] All results carrying user content declare untrusted content
 - [ ] All results respect the read bounds and report truncation where it applies
 - [ ] All results carry the current Garden Revision and appear in the Garden Activity feed
+
+## Answer
+
+Implemented bounded, paginated research tools with stable WebMCP envelopes,
+untrusted read-only annotations, Activity, and selection/focus-aware
+registration. Full suite, typecheck, and production build passed.

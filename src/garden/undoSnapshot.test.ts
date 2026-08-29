@@ -24,7 +24,10 @@ describe('writing and reading a snapshot back', () => {
 
     await writeUndoSnapshot(fileSystem, RECORD)
 
-    await expect(readUndoSnapshot(fileSystem, RECORD.id)).resolves.toEqual(RECORD)
+    await expect(readUndoSnapshot(fileSystem, RECORD.id)).resolves.toEqual({
+      ...RECORD,
+      previousState: 'present',
+    })
   })
 
   it('writes only under the operational directory, not among canonical files', async () => {
@@ -34,6 +37,35 @@ describe('writing and reading a snapshot back', () => {
 
     const [path] = Object.keys(fileSystem.snapshot())
     expect(path).toBe('.research-garden/undo/01HQ8X2K3M4N5P6Q7R8S9T0S1W.json')
+  })
+
+  it('normalizes a legacy flat snapshot without previousState as present', async () => {
+    const fileSystem = new InMemoryGardenFileSystem({}, 'my-garden')
+    await fileSystem.write(
+      ['.research-garden', 'undo', `${RECORD.id}.json`],
+      JSON.stringify(RECORD),
+    )
+
+    await expect(readUndoSnapshot(fileSystem, RECORD.id)).resolves.toEqual({
+      ...RECORD,
+      previousState: 'present',
+    })
+  })
+
+  it('rejects an absent snapshot whose prior text contradicts that state', async () => {
+    const fileSystem = new InMemoryGardenFileSystem(
+      {
+        '.research-garden/undo/contradictory.json': JSON.stringify({
+          ...RECORD,
+          id: 'contradictory',
+          previousState: 'absent',
+          previousText: 'content that existed',
+        }),
+      },
+      'my-garden',
+    )
+
+    await expect(readUndoSnapshot(fileSystem, 'contradictory')).resolves.toBeUndefined()
   })
 })
 

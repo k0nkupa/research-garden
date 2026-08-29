@@ -31,6 +31,8 @@ import { nowAsCanonicalTimestamp } from '../domain/schema/canonicalTimestamp'
 import { browserEntropy, createUlidFactory, type UlidEntropy } from '../domain/schema/ulid'
 import type { GardenFileSystem } from '../filesystem/GardenFileSystem'
 import { createCoreReadToolsBundle } from '../webmcp/coreReadTools'
+import { createDirectAdditionToolsBundle } from '../webmcp/directAdditionTools'
+import { createResearchToolsBundles } from '../webmcp/researchTools'
 import {
   createStateAwareToolRegistration,
   type ToolRegistrationState,
@@ -241,6 +243,14 @@ export function Workspace({
     }
   }, [garden.fileSystem, refreshPendingChanges])
 
+  /**
+   * Direct-addition tools keep their registration alive across rescans. The
+   * callback target changes with the latest render, while the registration
+   * itself remains stable so a successful write does not tear down its tools.
+   */
+  const rescanGardenRef = useRef(rescanGarden)
+  rescanGardenRef.current = rescanGarden
+
   // Runs once at mount: `refreshPendingChanges` has no other dependencies of
   // its own, and `initialGarden.fileSystem` is the same object `garden`
   // holds for the life of this component (ticket 13).
@@ -258,19 +268,29 @@ export function Workspace({
   }, [rescanGarden])
 
   // Ticket 19: the registration controller owns the compact, state-aware
-  // surface. Future action tickets add their own bundles; the core read bundle
-  // is available for an open Garden only after Agent Access is enabled.
+  // surface. Core reads, direct additions, and contextual research bundles all
+  // share this one session-scoped registration lifetime.
   const stateAwareRegistration = useMemo(
-    () =>
-      createStateAwareToolRegistration(window.navigator, [
-        createCoreReadToolsBundle({
-          getGarden: () => gardenRef.current,
-          recordActivity: (entry) => setActivity((log) => recordGardenActivity(log, entry)),
-          nextActivityId,
-          clock,
-        }),
-      ]),
-    [clock, nextActivityId],
+    () => {
+      const coreRuntime = {
+        getGarden: () => gardenRef.current,
+        recordActivity: (entry: GardenActivityEntry) =>
+          setActivity((log) => recordGardenActivity(log, entry)),
+        nextActivityId,
+        clock,
+      }
+      const additionsRuntime = {
+        ...coreRuntime,
+        refreshGarden: () => rescanGardenRef.current(),
+        entropy,
+      }
+      return createStateAwareToolRegistration(window.navigator, [
+        createCoreReadToolsBundle(coreRuntime),
+        createDirectAdditionToolsBundle(additionsRuntime),
+        ...createResearchToolsBundles(coreRuntime),
+      ])
+    },
+    [clock, entropy, nextActivityId],
   )
 
   useEffect(() => {
@@ -278,11 +298,12 @@ export function Workspace({
       agentAccess,
       gardenOpen: true,
       selectedItemId: selectedId,
+      selectedItemKind: selected?.item.kind,
       focusedBranchId: view.focusedId,
       hasPendingChanges: pendingChanges.length > 0,
     }
     stateAwareRegistration.update(nextState)
-  }, [agentAccess, pendingChanges.length, selectedId, stateAwareRegistration, view.focusedId])
+  }, [agentAccess, pendingChanges.length, selected?.item.kind, selectedId, stateAwareRegistration, view.focusedId])
 
   useEffect(() => () => stateAwareRegistration.disconnect(), [stateAwareRegistration])
 

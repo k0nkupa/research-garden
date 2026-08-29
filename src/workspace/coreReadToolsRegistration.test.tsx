@@ -9,8 +9,8 @@ import { InMemoryGardenFileSystem } from '../filesystem/InMemoryGardenFileSystem
 import { Workspace } from './Workspace'
 
 /**
- * The registration side of ticket 18: Connect turns the four core read tools
- * on, Disconnect turns them off, through the real Workspace. `readTool.test.ts`
+ * The registration side of tickets 18-21: Connect turns the current tool
+ * surface on and Disconnect turns it off, through the real Workspace. `readTool.test.ts`
  * and `coreReadTools.test.ts` already prove the tools themselves and the
  * registration call in isolation; this is the one place that proves
  * `agentAccess` flipping in the real component is actually what drives it.
@@ -71,17 +71,61 @@ describe('while Agent Access is off', () => {
 })
 
 describe('connecting', () => {
-  it('registers all four core read tools, sharing one AbortSignal', async () => {
+  it('registers core, direct-addition, and garden-level research tools with one AbortSignal per bundle', async () => {
     const registerTool = vi.fn().mockResolvedValue(undefined)
 
     await renderConnectedWorkspace(registerTool)
 
-    await waitFor(() => expect(registerTool).toHaveBeenCalledTimes(4))
+    await waitFor(() => expect(registerTool).toHaveBeenCalledTimes(10))
     const calls = registerTool.mock.calls as [{ name: string }, { signal: AbortSignal }][]
     const names = calls.map((call) => call[0].name).sort()
-    expect(names).toEqual(['audit_garden', 'inspect_garden', 'read_items', 'search_garden'])
+    expect(names).toEqual([
+      'add_leaf',
+      'audit_garden',
+      'capture_root',
+      'find_contradictions',
+      'find_open_questions',
+      'inspect_garden',
+      'plant_seed',
+      'prepare_source_comparison',
+      'read_items',
+      'search_garden',
+    ])
     const signals = new Set(calls.map((call) => call[1].signal))
-    expect(signals.size).toBe(1)
+    expect(signals.size).toBe(3)
+  })
+
+  it('adds selected-item and focused-Branch research tools as the person navigates', async () => {
+    const registerTool = vi.fn().mockResolvedValue(undefined)
+    await renderConnectedWorkspace(registerTool)
+    await waitFor(() => expect(registerTool).toHaveBeenCalledTimes(10))
+
+    const branch = screen.getByRole('treeitem', { name: /Attention mechanisms/ })
+    await userEvent.click(branch)
+    await waitFor(() => expect(registerTool).toHaveBeenCalledTimes(11))
+    expect((registerTool.mock.calls as [{ name: string }][]).at(-1)?.[0].name).toBe('trace_evidence')
+
+    branch.focus()
+    await userEvent.keyboard('f')
+    await waitFor(() => expect(registerTool).toHaveBeenCalledTimes(12))
+    expect((registerTool.mock.calls as [{ name: string }][]).at(-1)?.[0].name).toBe('explore_branch')
+  })
+
+  it('refreshes the visible Tree after a successful direct Seed tool write', async () => {
+    const registerTool = vi.fn().mockResolvedValue(undefined)
+    await renderConnectedWorkspace(registerTool)
+    await waitFor(() => expect(registerTool).toHaveBeenCalledTimes(10))
+
+    const plantSeed = (registerTool.mock.calls as [{ name: string; execute: (input: object, options: { signal: AbortSignal }) => Promise<unknown> }][])
+      .find(([tool]) => tool.name === 'plant_seed')?.[0]
+    if (!plantSeed) throw new Error('expected plant_seed to be registered')
+
+    const result = (await plantSeed.execute(
+      { title: 'A newly planted Seed', body: 'Captured verbatim.' },
+      { signal: new AbortController().signal },
+    )) as { ok: boolean }
+    expect(result.ok).toBe(true)
+    await waitFor(() => expect(screen.getByText('A newly planted Seed')).toBeInTheDocument())
   })
 })
 
@@ -89,7 +133,7 @@ describe('disconnecting', () => {
   it('aborts the signal the core read tools were registered with', async () => {
     const registerTool = vi.fn().mockResolvedValue(undefined)
     await renderConnectedWorkspace(registerTool)
-    await waitFor(() => expect(registerTool).toHaveBeenCalledTimes(4))
+    await waitFor(() => expect(registerTool).toHaveBeenCalledTimes(10))
     const [, options] = registerTool.mock.calls[0] as [unknown, { signal: AbortSignal }]
 
     await userEvent.click(screen.getByRole('button', { name: /^disconnect chatgpt$/i }))
@@ -100,7 +144,7 @@ describe('disconnecting', () => {
   it('registers a fresh set of tools -- and a fresh signal -- on reconnecting', async () => {
     const registerTool = vi.fn().mockResolvedValue(undefined)
     await renderConnectedWorkspace(registerTool)
-    await waitFor(() => expect(registerTool).toHaveBeenCalledTimes(4))
+    await waitFor(() => expect(registerTool).toHaveBeenCalledTimes(10))
     const [, firstOptions] = registerTool.mock.calls[0] as [unknown, { signal: AbortSignal }]
 
     await userEvent.click(screen.getByRole('button', { name: /^disconnect chatgpt$/i }))
@@ -109,8 +153,8 @@ describe('disconnecting', () => {
       within(screen.getByLabelText('Agent Access')).getByRole('button', { name: /^enable agent access$/i }),
     )
 
-    await waitFor(() => expect(registerTool).toHaveBeenCalledTimes(8))
-    const [, secondOptions] = registerTool.mock.calls[4] as [unknown, { signal: AbortSignal }]
+    await waitFor(() => expect(registerTool).toHaveBeenCalledTimes(20))
+    const [, secondOptions] = registerTool.mock.calls[10] as [unknown, { signal: AbortSignal }]
     expect(secondOptions.signal).not.toBe(firstOptions.signal)
     expect(secondOptions.signal.aborted).toBe(false)
   })
@@ -130,7 +174,7 @@ describe('calling a registered tool after a rescan', () => {
     await userEvent.click(
       within(screen.getByLabelText('Agent Access')).getByRole('button', { name: /^enable agent access$/i }),
     )
-    await waitFor(() => expect(registerTool).toHaveBeenCalledTimes(4))
+    await waitFor(() => expect(registerTool).toHaveBeenCalledTimes(10))
     const calls = registerTool.mock.calls as [{ name: string; execute: (input: object, options: { signal: AbortSignal }) => Promise<unknown> }][]
     const inspectTool = calls.find((call) => call[0].name === 'inspect_garden')?.[0]
     if (!inspectTool) throw new Error('expected inspect_garden to be registered')

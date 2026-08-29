@@ -1,14 +1,17 @@
 import { registerModelContextTool, type ModelContextTool } from './modelContext'
+import type { GardenItemKind } from '../domain/schema/gardenItem'
 
 /**
  * The pieces of workspace state that decide which agent capabilities are
- * useful.  Item and Branch identities are opaque to registration: the tools
- * themselves still receive stable IDs and validate them at their own seam.
+ * useful. Item and Branch identities are opaque to registration except for
+ * selectedItemKind, which lets a Seed-specific bundle stay unavailable for
+ * other selected items; tools still validate stable IDs at their own seam.
  */
 export interface ToolRegistrationState {
   readonly agentAccess: boolean
   readonly gardenOpen: boolean
   readonly selectedItemId: string | undefined
+  readonly selectedItemKind: GardenItemKind | undefined
   readonly focusedBranchId: string | undefined
   readonly hasPendingChanges: boolean
 }
@@ -49,6 +52,7 @@ const INITIAL_STATE: ToolRegistrationState = {
   agentAccess: false,
   gardenOpen: false,
   selectedItemId: undefined,
+  selectedItemKind: undefined,
   focusedBranchId: undefined,
   hasPendingChanges: false,
 }

@@ -102,6 +102,15 @@ export async function undoChange(
     const now = (options.now ?? nowAsCanonicalTimestamp)()
     const nextSnapshotId = createUlidFactory(options.entropy ?? browserEntropy)
     const undoSnapshotId = nextSnapshotId()
+    if (snapshot.previousState === 'absent') {
+      const emptyHash = await contentHash('')
+      if (snapshot.previousHash !== emptyHash) {
+        return {
+          kind: 'failed',
+          message: 'This Undo Snapshot has an invalid empty-state hash and cannot be restored.',
+        }
+      }
+    }
 
     // Snapshot what Undo is about to overwrite -- the edited content -- before
     // writing, exactly as `editItem` snapshots before its own write. This is
@@ -111,11 +120,44 @@ export async function undoChange(
       id: undoSnapshotId,
       itemId: input.itemId,
       path: snapshot.path,
+      previousState: 'present',
       previousText: currentText,
       previousHash: currentHash,
       resultingHash: snapshot.previousHash,
       appliedAt: now,
     })
+
+    // A direct addition snapshots the empty state because there was no
+    // canonical file to preserve before creation. Restoring that state means
+    // removing the one created file, not asking `writeAndVerify` to write an
+    // invalid empty Garden document. The pre-delete snapshot above keeps the
+    // created file recoverable through the same Undo Snapshot chain.
+    if (snapshot.previousState === 'absent') {
+      const emptyHash = await contentHash('')
+      await fileSystem.delete(snapshot.path)
+      try {
+        await fileSystem.read(snapshot.path)
+        return {
+          kind: 'verification-failed',
+          message: 'The added file was removed but could still be read back, so Undo was not confirmed.',
+        }
+      } catch (error) {
+        if (!(error instanceof GardenFileSystemError) || error.code !== 'not-found') {
+          return {
+            kind: 'verification-failed',
+            message: 'The added file could not be verified as removed after Undo.',
+          }
+        }
+      }
+
+      return {
+        kind: 'restored',
+        itemId: input.itemId,
+        path: snapshot.path,
+        restoredHash: emptyHash,
+        snapshotId: undoSnapshotId,
+      }
+    }
 
     const verified = await writeAndVerify(fileSystem, snapshot.path, snapshot.previousText)
     if (verified.kind === 'verification-failed') return verified

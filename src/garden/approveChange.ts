@@ -154,6 +154,7 @@ export async function approveChange(
       id: snapshotId,
       itemId: record.itemId,
       path: record.path,
+      previousState: 'present',
       previousText: currentFile.text,
       previousHash: currentHash,
       resultingHash: record.previewHash,

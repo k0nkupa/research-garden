@@ -26,6 +26,15 @@ const ACTION_LABELS: Record<GardenActivityAction, string> = {
   search_garden: 'Search',
   read_items: 'Read',
   audit_garden: 'Audit',
+  plant_seed: 'Plant Seed',
+  capture_root: 'Capture Root',
+  add_leaf: 'Add Leaf',
+  explore_branch: 'Explore Branch',
+  trace_evidence: 'Trace Evidence',
+  find_open_questions: 'Find Open Questions',
+  find_contradictions: 'Find Contradictions',
+  prepare_source_comparison: 'Prepare Source Comparison',
+  prepare_seed_cultivation: 'Prepare Seed Cultivation',
 }
 
 function formatTime(at: string): string {

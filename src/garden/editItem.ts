@@ -103,6 +103,7 @@ export async function editItem(
       id: snapshotId,
       itemId: input.itemId,
       path: indexed.path,
+      previousState: 'present',
       previousText: currentText,
       previousHash: currentHash,
       resultingHash,

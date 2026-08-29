@@ -34,6 +34,15 @@ export type GardenActivityAction =
   | 'search_garden'
   | 'read_items'
   | 'audit_garden'
+  | 'plant_seed'
+  | 'capture_root'
+  | 'add_leaf'
+  | 'explore_branch'
+  | 'trace_evidence'
+  | 'find_open_questions'
+  | 'find_contradictions'
+  | 'prepare_source_comparison'
+  | 'prepare_seed_cultivation'
 export type GardenActivityOutcome = 'success' | 'failure'
 
 export interface GardenActivityEntry {

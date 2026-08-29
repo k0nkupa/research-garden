@@ -4,7 +4,7 @@
 
 **Blocked by:** 18
 
-**Status:** ready-for-agent
+**Status:** resolved
 
 - [ ] Plant Seed creates one new Seed file directly, preserving the supplied body verbatim
 - [ ] Capture Root accepts a title, origin URL, exact excerpt or content, and optional attribution
@@ -22,3 +22,9 @@
 
 - [ ] `ensureMutable` refuses an addition whose target carries a Garden Diagnostic,
       returning a stable error rather than a bare refusal (ADR 0036, ADR 0052)
+
+## Answer
+
+Implemented direct Seed, Root, and Leaf additions through verified one-file
+writes with recoverable Undo Snapshots, stable WebMCP envelopes, Activity, and
+state-aware registration. Full suite, typecheck, and production build passed.
