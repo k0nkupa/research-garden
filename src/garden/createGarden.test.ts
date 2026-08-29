@@ -357,6 +357,7 @@ describe('when the folder cannot be written', () => {
       write: async () => {
         throw new Error('the disk went away')
       },
+      delete: async () => {},
     }
 
     await expect(createGarden(broken)).resolves.toMatchObject({ kind: 'failed' })

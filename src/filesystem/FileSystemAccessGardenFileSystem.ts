@@ -20,6 +20,7 @@ export interface DirectoryHandleLike {
   entries(): AsyncIterableIterator<[string, DirectoryHandleLike | FileHandleLike]>
   getDirectoryHandle(name: string, options?: { create?: boolean }): Promise<DirectoryHandleLike>
   getFileHandle(name: string, options?: { create?: boolean }): Promise<FileHandleLike>
+  removeEntry(name: string, options?: { recursive?: boolean }): Promise<void>
   queryPermission?(descriptor: { mode: 'read' | 'readwrite' }): Promise<GardenPermissionState>
   requestPermission?(descriptor: { mode: 'read' | 'readwrite' }): Promise<GardenPermissionState>
 }
@@ -121,6 +122,23 @@ export class FileSystemAccessGardenFileSystem implements GardenFileSystem {
       await writable.write(contents)
       await writable.close()
     } catch (error) {
+      throw this.#translate(error, path)
+    }
+  }
+
+  async delete(path: GardenPath): Promise<void> {
+    assertPathWithinRepository(path)
+    await this.#assertPermitted()
+
+    const { parent, name } = await this.#resolveParent(path)
+    // No parent directory, or nothing named `name` in it: already gone,
+    // which this port treats the same as having just removed it.
+    if (parent === undefined) return
+
+    try {
+      await parent.removeEntry(name)
+    } catch (error) {
+      if (isDomExceptionNamed(error, 'NotFoundError')) return
       throw this.#translate(error, path)
     }
   }

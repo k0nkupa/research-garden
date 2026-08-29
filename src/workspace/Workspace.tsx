@@ -1,7 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { approveChange, type ApproveChangeResult } from '../garden/approveChange'
 import { editItem, type EditItemResult } from '../garden/editItem'
 import {
+  activityForApproveChange,
   activityForEditItem,
+  activityForRejectChange,
   activityForUndoChange,
   recordGardenActivity,
   type GardenActivityEntry,
@@ -9,6 +12,12 @@ import {
 import { diagnosticsForItem } from '../garden/mutationGuard'
 import type { OpenedGarden } from '../garden/openGarden'
 import { openGarden } from '../garden/openGarden'
+import {
+  isPendingChangeStale,
+  listPendingChanges,
+  type PendingChangeRecord,
+} from '../garden/pendingChange'
+import { rejectChange, type RejectChangeResult } from '../garden/rejectChange'
 import { undoChange, type UndoChangeResult } from '../garden/undoChange'
 import {
   exceedsPerformanceTarget,
@@ -17,6 +26,9 @@ import {
 } from '../domain/index/performanceTarget'
 import { nowAsCanonicalTimestamp } from '../domain/schema/canonicalTimestamp'
 import { browserEntropy, createUlidFactory, type UlidEntropy } from '../domain/schema/ulid'
+import type { GardenFileSystem } from '../filesystem/GardenFileSystem'
+import { ChangeDiffPanel } from './ChangeDiffPanel'
+import { ChangeTray } from './ChangeTray'
 import { DiagnosticsPanel } from './DiagnosticsPanel'
 import { GardenActivityFeed } from './GardenActivityFeed'
 import { GardenTree } from './GardenTree'
@@ -54,7 +66,7 @@ export interface WorkspaceProps {
   readonly entropy?: UlidEntropy | undefined
 }
 
-type PanelMode = 'item' | 'diagnostics' | 'activity'
+type PanelMode = 'item' | 'diagnostics' | 'activity' | 'change'
 
 export function Workspace({ garden: initialGarden, now, entropy }: WorkspaceProps) {
   const [garden, setGarden] = useState<OpenedGarden>(initialGarden)
@@ -76,6 +88,10 @@ export function Workspace({ garden: initialGarden, now, entropy }: WorkspaceProp
    * scan rather than sharing another's -- see `rescanGarden`.
    */
   const inFlightRescans = useRef(0)
+  const [pendingChanges, setPendingChanges] = useState<readonly PendingChangeRecord[]>([])
+  /** Recomputed alongside `pendingChanges`, from each record's own current-hash check. */
+  const [staleChangeIds, setStaleChangeIds] = useState<ReadonlySet<string>>(new Set())
+  const [selectedChangeId, setSelectedChangeId] = useState<string | undefined>(undefined)
 
   const clock = useCallback(() => (now ?? nowAsCanonicalTimestamp)(), [now])
   const nextActivityId = useMemo(() => createUlidFactory(entropy ?? browserEntropy), [entropy])
@@ -83,6 +99,8 @@ export function Workspace({ garden: initialGarden, now, entropy }: WorkspaceProp
   const selected = selectedId === undefined ? undefined : garden.index.items.get(selectedId)
   const diagnostics = garden.index.diagnostics
   const undoableSelected = lastEdit !== undefined && selectedId === lastEdit.itemId
+  const selectedChange = pendingChanges.find((change) => change.id === selectedChangeId)
+  const titleForItem = (itemId: string) => garden.index.items.get(itemId)?.item.title
   // ADR 0061 / ticket 24: a warning, never a limit -- everything below still
   // opens and works regardless of what this says.
   const performanceWarning = exceedsPerformanceTarget(garden.index)
@@ -129,6 +147,29 @@ export function Workspace({ garden: initialGarden, now, entropy }: WorkspaceProp
    * already did, because a write's own result (returned separately) is still
    * the authority on whether that write happened.
    */
+  /**
+   * Reloads Pending Changes and which of them are Stale, from the operational
+   * directory (ticket 14). Called once at mount below, and again inside
+   * `rescanGarden` -- so window focus, Refresh, and immediately before a
+   * mutation all cover it too, without a second boundary to keep in sync.
+   * Pending Changes are not part of the `garden` prop `Workspace` opens with,
+   * which is why mount needs its own call rather than relying on that.
+   */
+  const refreshPendingChanges = useCallback(async (targetFileSystem: GardenFileSystem) => {
+    try {
+      const changes = await listPendingChanges(targetFileSystem)
+      const staleFlags = await Promise.all(
+        changes.map((change) => isPendingChangeStale(targetFileSystem, change)),
+      )
+      setPendingChanges(changes)
+      setStaleChangeIds(new Set(changes.filter((_, index) => staleFlags[index]).map((change) => change.id)))
+    } catch {
+      // Best-effort, matching the Index Cache and rescan's own posture: a
+      // Pending Change that cannot currently be listed is not reason enough
+      // to disturb a Tree that just rescanned successfully.
+    }
+  }, [])
+
   const rescanGarden = useCallback(async (): Promise<OpenedGarden | undefined> => {
     inFlightRescans.current += 1
     setRescanning(true)
@@ -137,6 +178,7 @@ export function Workspace({ garden: initialGarden, now, entropy }: WorkspaceProp
       if (reopened.kind === 'opened') {
         setRescanNotice(undefined)
         setGarden(reopened.garden)
+        await refreshPendingChanges(reopened.garden.fileSystem)
         return reopened.garden
       }
       setRescanNotice(
@@ -149,7 +191,14 @@ export function Workspace({ garden: initialGarden, now, entropy }: WorkspaceProp
       inFlightRescans.current -= 1
       if (inFlightRescans.current === 0) setRescanning(false)
     }
-  }, [garden.fileSystem])
+  }, [garden.fileSystem, refreshPendingChanges])
+
+  // Runs once at mount: `refreshPendingChanges` has no other dependencies of
+  // its own, and `initialGarden.fileSystem` is the same object `garden`
+  // holds for the life of this component (ticket 13).
+  useEffect(() => {
+    void refreshPendingChanges(initialGarden.fileSystem)
+  }, [initialGarden.fileSystem, refreshPendingChanges])
 
   // ADR 0053: rescanned when the window regains focus. Not `visibilitychange`:
   // the criterion is specifically focus, and App.tsx already uses the same
@@ -213,6 +262,70 @@ export function Workspace({ garden: initialGarden, now, entropy }: WorkspaceProp
     return result
   }, [clock, entropy, garden.fileSystem, lastEdit, nextActivityId, now, rescanGarden])
 
+  const selectChange = (id: string) => {
+    setSelectedChangeId(id)
+    setPanelMode('change')
+  }
+
+  /**
+   * Approving lands the person on the now-applied item, with Undo already
+   * available -- the same `lastEdit`/`undoLastEdit` mechanism a direct save
+   * already offers (ticket 12), reused rather than duplicated, since an
+   * applied Pending Change and a direct edit both end at exactly the same
+   * place: one canonical file, one Undo Snapshot, subject to the same
+   * resulting-hash rule.
+   */
+  const approveSelectedChange = useCallback(
+    async (change: PendingChangeRecord): Promise<ApproveChangeResult> => {
+      const result = await approveChange(
+        garden.fileSystem,
+        { id: change.id, previewHash: change.previewHash },
+        { now, entropy },
+      )
+
+      setActivity((log) =>
+        recordGardenActivity(log, activityForApproveChange(change.itemId, result, nextActivityId(), clock())),
+      )
+
+      if (result.kind === 'applied') {
+        setLastEdit({ itemId: change.itemId, snapshotId: result.snapshotId })
+        setSelectedChangeId(undefined)
+        setSelectedId(change.itemId)
+        setPanelMode('item')
+        await rescanGarden()
+      } else {
+        // A refusal (Stale, invalid) may itself reflect something that just
+        // changed -- refresh the tray so what it shows stays accurate.
+        await refreshPendingChanges(garden.fileSystem)
+      }
+
+      return result
+    },
+    [clock, entropy, garden.fileSystem, nextActivityId, now, refreshPendingChanges, rescanGarden],
+  )
+
+  const rejectSelectedChange = useCallback(
+    async (change: PendingChangeRecord): Promise<RejectChangeResult> => {
+      const result = await rejectChange(garden.fileSystem, change.id)
+
+      setActivity((log) =>
+        recordGardenActivity(log, activityForRejectChange(change.itemId, result, nextActivityId(), clock())),
+      )
+
+      if (result.kind === 'rejected') {
+        const wasSelected = selectedChangeId === change.id
+        if (wasSelected) {
+          setSelectedChangeId(undefined)
+          setPanelMode('item')
+        }
+        await refreshPendingChanges(garden.fileSystem)
+      }
+
+      return result
+    },
+    [clock, garden.fileSystem, nextActivityId, refreshPendingChanges, selectedChangeId],
+  )
+
   return (
     <main className="workspace">
       <div className="workspace__bar">
@@ -248,6 +361,24 @@ export function Workspace({ garden: initialGarden, now, entropy }: WorkspaceProp
             onClick={() => setPanelMode((mode) => (mode === 'diagnostics' ? 'item' : 'diagnostics'))}
           >
             {diagnostics.length} {diagnostics.length === 1 ? 'Diagnostic' : 'Diagnostics'}
+          </button>
+        )}
+
+        {pendingChanges.length > 0 && (
+          <button
+            type="button"
+            className="workspace__panel-toggle"
+            aria-pressed={panelMode === 'change'}
+            onClick={() => {
+              if (panelMode === 'change') {
+                setPanelMode('item')
+                return
+              }
+              const [firstChange] = pendingChanges
+              if (firstChange) selectChange(selectedChangeId ?? firstChange.id)
+            }}
+          >
+            {pendingChanges.length} {pendingChanges.length === 1 ? 'Change' : 'Changes'}
           </button>
         )}
 
@@ -297,10 +428,15 @@ export function Workspace({ garden: initialGarden, now, entropy }: WorkspaceProp
           />
         )}
 
-        {panelMode === 'activity' && (
-          <GardenActivityFeed
-            entries={activity}
-            titleFor={(itemId) => garden.index.items.get(itemId)?.item.title}
+        {panelMode === 'activity' && <GardenActivityFeed entries={activity} titleFor={titleForItem} />}
+
+        {panelMode === 'change' && (
+          <ChangeDiffPanel
+            change={selectedChange}
+            isStale={selectedChange !== undefined && staleChangeIds.has(selectedChange.id)}
+            titleFor={titleForItem}
+            onApprove={approveSelectedChange}
+            onReject={rejectSelectedChange}
           />
         )}
 
@@ -315,6 +451,14 @@ export function Workspace({ garden: initialGarden, now, entropy }: WorkspaceProp
           />
         )}
       </div>
+
+      <ChangeTray
+        changes={pendingChanges}
+        staleIds={staleChangeIds}
+        selectedId={panelMode === 'change' ? selectedChangeId : undefined}
+        onSelect={selectChange}
+        titleFor={titleForItem}
+      />
     </main>
   )
 }

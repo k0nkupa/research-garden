@@ -40,6 +40,22 @@ function isMarkdown(path: GardenPath): boolean {
 }
 
 /**
+ * Every canonical file, read fresh. Shared by `openGarden` and by
+ * `approveChange` (ticket 14), which needs the same current, complete
+ * picture to revalidate a proposal's target against before writing it.
+ */
+export async function scanCanonicalFiles(fileSystem: GardenFileSystem): Promise<ScannedFile[]> {
+  const scanned: ScannedFile[] = []
+  for (const directory of CANONICAL_DIRECTORIES) {
+    const paths = await fileSystem.listFiles([directory])
+    for (const path of paths.filter(isMarkdown)) {
+      scanned.push({ path, text: await fileSystem.read(path) })
+    }
+  }
+  return scanned
+}
+
+/**
  * Scans a Garden Repository into a Garden Index.
  *
  * Only the typed canonical directories are read. The operational directory is
@@ -71,15 +87,7 @@ export async function openGarden(fileSystem: GardenFileSystem): Promise<OpenGard
     }
 
     const cache = await readIndexCache(fileSystem)
-
-    const scanned: ScannedFile[] = []
-    for (const directory of CANONICAL_DIRECTORIES) {
-      const paths = await fileSystem.listFiles([directory])
-      for (const path of paths.filter(isMarkdown)) {
-        scanned.push({ path, text: await fileSystem.read(path) })
-      }
-    }
-
+    const scanned = await scanCanonicalFiles(fileSystem)
     const scan = await scanGardenWithCache(scanned, cache.entries)
     await writeIndexCache(fileSystem, scan.cache)
 

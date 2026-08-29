@@ -174,6 +174,13 @@ export class FakeDirectoryHandle implements DirectoryHandleLike {
     return new FakeFileHandle(name, this, this.state)
   }
 
+  async removeEntry(name: string): Promise<void> {
+    this.#assertPermitted()
+    if (!this.#files.delete(name) && !this.#directories.delete(name)) {
+      throw domException('NotFoundError')
+    }
+  }
+
   #assertPermitted() {
     if (this.state.permission !== 'granted') throw domException('NotAllowedError')
   }

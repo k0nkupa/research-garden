@@ -180,6 +180,35 @@ describe('editing an item with no Diagnostics', () => {
     expect(snapshot?.previousText).toBe(branchFile)
   })
 
+  it('records the same instant on the Undo Snapshot as it wrote to updated_at', async () => {
+    // A fixed clock (`options.now`, used everywhere else in this file) cannot
+    // tell `appliedAt` and `updated_at` apart if they were computed by two
+    // separate `now()` calls: both calls return the same fixed string either
+    // way. A clock that ticks on every call is the only way to prove the two
+    // are read from one shared instant, not two.
+    let calls = 0
+    const tickingNow = () => {
+      calls += 1
+      return calls === 1 ? NOW : '2099-01-01T00:00:00Z'
+    }
+    const fileSystem = gardenWith({ 'branches/attention.md': branchFile })
+    const index = await indexFor({ 'branches/attention.md': branchFile })
+
+    const result = await editItem(
+      fileSystem,
+      index,
+      { itemId: BRANCH, baseText: branchFile, newBody: '\nEdited body text.\n' },
+      { now: tickingNow, entropy: countingEntropy() },
+    )
+    if (result.kind !== 'saved') throw new Error('expected saved')
+    if (!result.snapshotId) throw new Error('expected a real edit to produce a snapshot')
+
+    expect(fileSystem.snapshot()['branches/attention.md']).toContain(`updated_at: ${NOW}`)
+    const snapshot = await readUndoSnapshot(fileSystem, result.snapshotId)
+    expect(snapshot?.appliedAt).toBe(NOW)
+    expect(calls).toBe(1)
+  })
+
   it('records the resulting hash on the Undo Snapshot', async () => {
     const { fileSystem, result } = await editAttention()
     if (result.kind !== 'saved') throw new Error('expected saved')

@@ -36,6 +36,7 @@ function delegateTo(fileSystem: GardenFileSystem): GardenFileSystem {
     read: (path) => fileSystem.read(path),
     readBytes: (path) => fileSystem.readBytes(path),
     write: (path, contents) => fileSystem.write(path, contents),
+    delete: (path) => fileSystem.delete(path),
   }
 }
 
@@ -198,6 +199,7 @@ describe('when the folder cannot be read at all', () => {
       read: async () => '',
       readBytes: async () => new Uint8Array(),
       write: async () => {},
+      delete: async () => {},
     }
 
     await expect(openGarden(broken)).resolves.toMatchObject({ kind: 'failed' })

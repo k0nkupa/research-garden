@@ -1,11 +1,8 @@
-import { contentHash } from '../domain/hash'
-import { parseGardenDocument, serializeGardenDocument, setBody, setFrontmatterField } from '../domain/document/gardenDocument'
 import type { GardenIndex } from '../domain/index/gardenIndex'
 import { nowAsCanonicalTimestamp } from '../domain/schema/canonicalTimestamp'
-import { rootEvidenceChanges, type RootEvidenceChange } from '../domain/schema/rootEvidence'
 import { createUlidFactory, browserEntropy, type UlidEntropy } from '../domain/schema/ulid'
 import { GardenFileSystemError, type GardenFileSystem, type GardenPath } from '../filesystem/GardenFileSystem'
-import { ensureMutable } from './mutationGuard'
+import { deriveBodyEdit, type BodyEditRefusal } from './deriveBodyEdit'
 import { writeUndoSnapshot } from './undoSnapshot'
 import { writeAndVerify } from './verifiedWrite'
 
@@ -24,6 +21,15 @@ import { writeAndVerify } from './verifiedWrite'
  * Snapshot is an operational write, not a second canonical one. A body that
  * comes back identical to what is already on disk is not an edit and writes
  * nothing at all, so `updated_at` never moves for a no-op save.
+ *
+ * A person edits their own files directly, without approval -- unlike
+ * `proposeChange` (ticket 14), which an agent uses instead, because ADR 0005
+ * asks an agent's edit to a person's existing knowledge for a preview and
+ * explicit approval first. The checks and the derivation of what would be
+ * written are shared with it (`deriveBodyEdit`), so a person's edit and an
+ * agent's proposed one can never validate against different rules; only what
+ * happens once a proposed body is `'ready'` differs -- write it now, or hold
+ * it for review.
  */
 
 export interface EditItemInput {
@@ -53,16 +59,8 @@ export type EditItemResult =
       readonly previousHash: string
       readonly resultingHash: string
     }
-  | { readonly kind: 'blocked'; readonly reason: string }
-  | {
-      readonly kind: 'evidence-refused'
-      readonly message: string
-      readonly changes: readonly RootEvidenceChange[]
-    }
-  | { readonly kind: 'permission-required' }
-  | { readonly kind: 'stale'; readonly message: string }
+  | BodyEditRefusal
   | { readonly kind: 'verification-failed'; readonly message: string }
-  | { readonly kind: 'failed'; readonly message: string }
 
 /** A fixed, generic reason for an unexpected failure -- never the raw error. */
 const GENERIC_FAILURE_MESSAGE =
@@ -74,81 +72,27 @@ export async function editItem(
   input: EditItemInput,
   options: EditItemOptions = {},
 ): Promise<EditItemResult> {
-  // ADR 0052 / ticket 05: an item carrying a Garden Diagnostic is readable but
-  // not writable, and this is the check that makes that criterion falsifiable.
-  const block = ensureMutable(index, input.itemId)
-  if (block) return { kind: 'blocked', reason: block.reason }
-
-  // `ensureMutable` above already refused a missing item, so this is present.
-  const indexed = index.items.get(input.itemId)!
-
-  // ADR 0012 / ADR 0020 / ticket 03: a Root's body is its captured evidence.
-  // Only its metadata may be corrected, and this action only ever edits body
-  // text, so any body change to a Root is refused outright. Written as a
-  // literal `kind` comparison (rather than calling `isBodyEditableKind`) so
-  // TypeScript narrows `indexed.item` to `RootItem` for `rootEvidenceChanges`;
-  // `isBodyEditableKind` in `rootEvidence.ts` still owns the rule itself, and
-  // this is the one place it is checked for real (ItemPanel's own use of it
-  // is UI-only, to decide whether to offer Edit at all).
-  if (indexed.item.kind === 'root') {
-    const changes = rootEvidenceChanges(indexed.item, { ...indexed.item, body: input.newBody })
-    if (changes.length > 0) {
-      return {
-        kind: 'evidence-refused',
-        message:
-          "A Root's captured evidence cannot be edited; only its metadata (such as attribution) may be corrected.",
-        changes,
-      }
-    }
-  }
+  // Computed once and reused for both `updated_at` (inside `deriveBodyEdit`)
+  // and the Undo Snapshot's `appliedAt` below, so the two can never disagree.
+  const appliedAt = (options.now ?? nowAsCanonicalTimestamp)()
 
   try {
-    if ((await fileSystem.permission()) !== 'granted') return { kind: 'permission-required' }
+    const derived = await deriveBodyEdit(fileSystem, index, input, appliedAt)
 
-    // "Revalidate ... target content hash": the file has to still be exactly
-    // what the person was shown when they opened Edit mode, or a concurrent
-    // change (another tab, an agent) could be silently discarded.
-    const currentText = await fileSystem.read(indexed.path)
-    const [currentHash, baseHash] = await Promise.all([
-      contentHash(currentText),
-      contentHash(input.baseText),
-    ])
-    if (currentHash !== baseHash) {
-      return {
-        kind: 'stale',
-        message: 'This item changed on disk since it was opened for editing. Reopen it to edit the current version.',
-      }
-    }
+    if (derived.kind !== 'ready' && derived.kind !== 'no-op') return derived
 
-    const parsed = parseGardenDocument(currentText)
-    if (!parsed.ok) {
-      // The parser's own message can quote fragments of the file it failed on
-      // (ADR 0067: Garden Activity never carries file content), so only the
-      // failure code is reported.
-      return {
-        kind: 'failed',
-        message: `The file at ${indexed.path.join('/')} could not be parsed (${parsed.error.code}).`,
-      }
-    }
-
-    // ADR 0077: `updated_at` moves only when the item is actually edited. A
-    // body identical to what is already on disk is not an edit -- nothing is
-    // written, and there is no Undo Snapshot for a change that never happened.
-    if (input.newBody === parsed.document.body) {
+    if (derived.kind === 'no-op') {
       return {
         kind: 'saved',
         itemId: input.itemId,
-        path: indexed.path,
+        path: derived.indexed.path,
         snapshotId: undefined,
-        previousHash: currentHash,
-        resultingHash: currentHash,
+        previousHash: derived.currentHash,
+        resultingHash: derived.currentHash,
       }
     }
 
-    const now = (options.now ?? nowAsCanonicalTimestamp)()
-    const edited = setFrontmatterField(setBody(parsed.document, input.newBody), 'updated_at', now)
-    const newText = serializeGardenDocument(edited)
-    const resultingHash = await contentHash(newText)
+    const { indexed, currentText, currentHash, newText, resultingHash } = derived
 
     const nextSnapshotId = createUlidFactory(options.entropy ?? browserEntropy)
     const snapshotId = nextSnapshotId()
@@ -162,7 +106,7 @@ export async function editItem(
       previousText: currentText,
       previousHash: currentHash,
       resultingHash,
-      appliedAt: now,
+      appliedAt,
     })
 
     const verified = await writeAndVerify(fileSystem, indexed.path, newText)

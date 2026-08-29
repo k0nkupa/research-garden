@@ -1,5 +1,10 @@
-import { GardenFileSystemError, type GardenFileSystem, type GardenPath } from '../filesystem/GardenFileSystem'
-import { OPERATIONAL_DIRECTORY } from '../domain/schema/itemIdentity'
+import type { GardenFileSystem, GardenPath } from '../filesystem/GardenFileSystem'
+import {
+  isOperationalRecordShape,
+  operationalRecordPath,
+  readOperationalRecord,
+  writeOperationalRecord,
+} from './operationalRecord'
 
 /**
  * The Undo Snapshot: a recoverable record of one applied file change.
@@ -26,37 +31,20 @@ const UNDO_DIRECTORY = 'undo'
 
 /** Addressed by the snapshot's own operational id, never a caller-supplied path. */
 export function undoSnapshotPath(id: string): GardenPath {
-  return [OPERATIONAL_DIRECTORY, UNDO_DIRECTORY, `${id}.json`]
+  return operationalRecordPath(UNDO_DIRECTORY, id)
 }
 
 export async function writeUndoSnapshot(
   fileSystem: GardenFileSystem,
   record: UndoSnapshotRecord,
 ): Promise<void> {
-  const serializable = { ...record, path: [...record.path] }
-  await fileSystem.write(undoSnapshotPath(record.id), JSON.stringify(serializable, null, 2))
+  await writeOperationalRecord(fileSystem, UNDO_DIRECTORY, record)
 }
 
 const STRING_FIELDS = ['id', 'itemId', 'previousText', 'previousHash', 'resultingHash', 'appliedAt'] as const
 
-/**
- * Whether parsed JSON has the shape a genuine Undo Snapshot record has.
- *
- * Nothing else in this codebase trusts a value off disk without validating it
- * first (`parseGardenDocument` + `validateGardenItem` do the equivalent job
- * for canonical Markdown). A snapshot is this action's own operational state,
- * not a person's file, but it still reaches a filesystem write with a path
- * taken from it, so a truncated or hand-edited record has to be caught here
- * rather than surfacing as an uncaught `SyntaxError` or an unchecked path.
- */
 function isUndoSnapshotRecord(value: unknown): value is UndoSnapshotRecord {
-  if (typeof value !== 'object' || value === null) return false
-  const record = value as Record<string, unknown>
-
-  if (!STRING_FIELDS.every((field) => typeof record[field] === 'string')) return false
-
-  const path = record['path']
-  return Array.isArray(path) && path.length > 0 && path.every((segment) => typeof segment === 'string')
+  return isOperationalRecordShape(value, STRING_FIELDS)
 }
 
 /** `undefined` when no snapshot exists at that id, or what is there is not one. */
@@ -64,25 +52,5 @@ export async function readUndoSnapshot(
   fileSystem: GardenFileSystem,
   id: string,
 ): Promise<UndoSnapshotRecord | undefined> {
-  let text: string
-  try {
-    text = await fileSystem.read(undoSnapshotPath(id))
-  } catch (error) {
-    if (error instanceof GardenFileSystemError && error.code === 'not-found') return undefined
-    throw error
-  }
-
-  let parsed: unknown
-  try {
-    parsed = JSON.parse(text)
-  } catch {
-    // A corrupted operational record is reported the same way a missing one
-    // is: there is nothing here `undoChange` can safely restore from. The
-    // parse error itself is deliberately not returned to any caller -- it can
-    // quote fragments of the surrounding text, and that text is `previousText`,
-    // a person's file content (ADR 0067: Garden Activity never carries that).
-    return undefined
-  }
-
-  return isUndoSnapshotRecord(parsed) ? parsed : undefined
+  return readOperationalRecord(fileSystem, UNDO_DIRECTORY, id, isUndoSnapshotRecord)
 }

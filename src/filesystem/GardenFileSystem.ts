@@ -63,6 +63,16 @@ export interface GardenFileSystem {
 
   /** One complete write. Verification of the result belongs to a later layer. */
   write(path: GardenPath, contents: string): Promise<void>
+
+  /**
+   * Removes one file. Never used on canonical Markdown (ADR 0021 gives each
+   * MVP Garden Action at most one canonical write, never a deletion) --
+   * this exists for rejecting a Pending Change (ticket 14), which is
+   * removing an operational record, not touching a person's knowledge.
+   * Resolves without error when nothing exists at that path, matching
+   * `listFiles`'s own "absence is not failure" stance.
+   */
+  delete(path: GardenPath): Promise<void>
 }
 
 /**

@@ -114,6 +114,41 @@ export function describeGardenFileSystemContract(name: string, setUp: ContractSe
       })
     })
 
+    describe('deleting', () => {
+      it('removes a file so it can no longer be read', async () => {
+        const { fileSystem } = setUp(sampleGarden)
+
+        await fileSystem.delete(['branches', 'attention.md'])
+
+        await expect(fileSystem.read(['branches', 'attention.md'])).rejects.toMatchObject({
+          code: 'not-found',
+        })
+      })
+
+      it('removes a deleted file from listing', async () => {
+        const { fileSystem } = setUp(sampleGarden)
+
+        await fileSystem.delete(['branches', 'attention.md'])
+
+        const found = await fileSystem.listFiles(['branches'])
+        expect(found.map((path) => path.join('/'))).not.toContain('branches/attention.md')
+      })
+
+      it('resolves without error when nothing exists at that path', async () => {
+        const { fileSystem } = setUp(sampleGarden)
+
+        await expect(fileSystem.delete(['branches', 'never-existed.md'])).resolves.toBeUndefined()
+      })
+
+      it('leaves every other file untouched', async () => {
+        const { fileSystem } = setUp(sampleGarden)
+
+        await fileSystem.delete(['branches', 'attention.md'])
+
+        await expect(fileSystem.read(['roots', 'paper.md'])).resolves.toBe('# A paper\n')
+      })
+    })
+
     // ADR 0058: the selected folder is the boundary, and the port is where that
     // is enforced. No caller may reach outside it.
     describe('path safety', () => {
@@ -140,6 +175,12 @@ export function describeGardenFileSystemContract(name: string, setUp: ContractSe
           await expect(fileSystem.write(path, 'x')).rejects.toMatchObject({
             code: 'path-escape',
           })
+        })
+
+        it(`refuses to delete through ${label}`, async () => {
+          const { fileSystem } = setUp(sampleGarden)
+
+          await expect(fileSystem.delete(path)).rejects.toMatchObject({ code: 'path-escape' })
         })
       }
 
@@ -197,6 +238,15 @@ export function describeGardenFileSystemContract(name: string, setUp: ContractSe
         revokePermission()
 
         await expect(fileSystem.write(['branches', 'a.md'], 'x')).rejects.toMatchObject({
+          code: 'permission-denied',
+        })
+      })
+
+      it('refuses to delete once permission has lapsed', async () => {
+        const { fileSystem, revokePermission } = setUp(sampleGarden)
+        revokePermission()
+
+        await expect(fileSystem.delete(['branches', 'attention.md'])).rejects.toMatchObject({
           code: 'permission-denied',
         })
       })

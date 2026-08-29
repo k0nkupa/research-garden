@@ -145,6 +145,7 @@ describe('concurrent rescans', () => {
       read: (path: readonly string[]) => real.read(path),
       readBytes: (path: readonly string[]) => real.readBytes(path),
       write: (path: readonly string[], contents: string) => real.write(path, contents),
+      delete: (path: readonly string[]) => real.delete(path),
       // Only the very first call blocks, so exactly one rescan is left in
       // flight while a second one is requested.
       listFiles: async (directory: readonly string[]) => {

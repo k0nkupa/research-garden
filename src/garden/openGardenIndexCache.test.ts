@@ -172,6 +172,7 @@ describe('the cache never becomes a competing authority', () => {
         if (path.join('/') === cachePath) throw new Error('disk is full')
         return real.write(path, contents)
       },
+      delete: (path) => real.delete(path),
     }
 
     const result = await openGarden(refusesOnlyTheCacheWrite)

@@ -1,4 +1,6 @@
+import { describeApproveChangeFailure, type ApproveChangeResult } from './approveChange'
 import { describeEditItemFailure, type EditItemResult } from './editItem'
+import { describeRejectChangeFailure, type RejectChangeResult } from './rejectChange'
 import { describeUndoChangeFailure, type UndoChangeResult } from './undoChange'
 
 /**
@@ -14,7 +16,7 @@ import { describeUndoChangeFailure, type UndoChangeResult } from './undoChange'
  * and `undoChange.ts`, which deliberately never surface `error.message`).
  */
 
-export type GardenActivityAction = 'edit_item' | 'undo_change'
+export type GardenActivityAction = 'edit_item' | 'undo_change' | 'approve_change' | 'reject_change'
 export type GardenActivityOutcome = 'success' | 'failure'
 
 export interface GardenActivityEntry {
@@ -66,5 +68,37 @@ export function activityForUndoChange(
     itemIds: [itemId],
     outcome: result.kind === 'restored' ? 'success' : 'failure',
     detail: describeUndoChangeFailure(result),
+  }
+}
+
+export function activityForApproveChange(
+  itemId: string,
+  result: ApproveChangeResult,
+  id: string,
+  at: string,
+): GardenActivityEntry {
+  return {
+    id,
+    action: 'approve_change',
+    at,
+    itemIds: [itemId],
+    outcome: result.kind === 'applied' ? 'success' : 'failure',
+    detail: describeApproveChangeFailure(result),
+  }
+}
+
+export function activityForRejectChange(
+  itemId: string,
+  result: RejectChangeResult,
+  id: string,
+  at: string,
+): GardenActivityEntry {
+  return {
+    id,
+    action: 'reject_change',
+    at,
+    itemIds: [itemId],
+    outcome: result.kind === 'rejected' ? 'success' : 'failure',
+    detail: describeRejectChangeFailure(result),
   }
 }

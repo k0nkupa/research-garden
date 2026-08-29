@@ -106,6 +106,13 @@ export class InMemoryGardenFileSystem implements GardenFileSystem {
     this.#files.set(formatGardenPath(path), contents)
   }
 
+  async delete(path: GardenPath): Promise<void> {
+    assertPathWithinRepository(path)
+    this.#assertPermitted()
+
+    this.#files.delete(formatGardenPath(path))
+  }
+
   #assertPermitted(): void {
     if (this.#permission !== 'granted') throw permissionLapsed()
   }

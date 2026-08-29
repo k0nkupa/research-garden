@@ -1035,3 +1035,117 @@ body {
   font-size: 0.85em;
   color: color-mix(in srgb, var(--bark) 72%, transparent);
 }
+
+/*
+ * The Change Tray (ADR 0047, ticket 14): a thin status rail across the
+ * bottom of the workspace when there is nothing to review, expanding only
+ * once a Pending Change exists. It never grows to cover the Tree above it --
+ * opening one only changes what the right-hand panel shows.
+ *
+ * Pollen, not mulberry: mulberry already means Diagnostics (ticket 10), and
+ * a proposal awaiting review is not a problem the way an invalid file is.
+ */
+.change-tray {
+  flex: none;
+  border-top: 1px solid color-mix(in srgb, var(--lichen) 55%, transparent);
+  padding: 0.6rem 1.25rem;
+  font-family: var(--metadata);
+}
+
+.change-tray--empty {
+  font-size: 0.75rem;
+  color: color-mix(in srgb, var(--bark) 72%, transparent);
+}
+
+.change-tray__heading {
+  margin: 0 0 0.5rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: color-mix(in srgb, var(--pollen) 70%, var(--bark));
+}
+
+.change-tray__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.change-tray__entry {
+  font-family: var(--metadata);
+  font-size: 0.75rem;
+  padding: 0.25rem 0.7rem;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--pollen) 55%, transparent);
+  background: var(--canvas);
+  color: color-mix(in srgb, var(--pollen) 70%, var(--bark));
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.change-tray__entry[aria-pressed='true'] {
+  background: var(--pollen);
+  color: var(--bark);
+}
+
+.change-tray__entry:focus-visible {
+  outline: 2px solid var(--pollen);
+  outline-offset: 2px;
+}
+
+.change-tray__stale-badge {
+  font-size: 0.65rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 0.05rem 0.4rem;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--mulberry) 25%, transparent);
+  color: var(--bark);
+}
+
+/* The diff itself, in the shared right-hand panel (ADR 0047: never over the Tree). */
+.change-diff {
+  margin: 0 0 1rem;
+  padding: 0.75rem;
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--lichen) 15%, transparent);
+  font-family: var(--metadata);
+  font-size: 0.85rem;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  overflow-x: auto;
+}
+
+.change-diff__line {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.change-diff__marker {
+  flex: none;
+  width: 1ch;
+  color: color-mix(in srgb, var(--bark) 72%, transparent);
+}
+
+.change-diff__line--added {
+  background: color-mix(in srgb, var(--canopy) 15%, transparent);
+}
+
+.change-diff__line--added .change-diff__marker {
+  color: var(--canopy);
+}
+
+.change-diff__line--removed {
+  background: color-mix(in srgb, var(--mulberry) 12%, transparent);
+  text-decoration: line-through;
+  text-decoration-color: color-mix(in srgb, var(--mulberry) 60%, transparent);
+}
+
+.change-diff__line--removed .change-diff__marker {
+  color: var(--mulberry);
+  text-decoration: none;
+}

@@ -18,6 +18,8 @@ export interface GardenActivityFeedProps {
 const ACTION_LABELS: Record<GardenActivityAction, string> = {
   edit_item: 'Edit',
   undo_change: 'Undo',
+  approve_change: 'Approve',
+  reject_change: 'Reject',
 }
 
 function formatTime(at: string): string {
