@@ -6,6 +6,7 @@ import { registerModelContextTool } from './modelContext'
 import { READ_ITEMS_SPEC } from './readItems'
 import { createReadTool } from './readTool'
 import { SEARCH_GARDEN_SPEC } from './searchGarden'
+import type { StateAwareToolBundle } from './stateAwareTools'
 
 /**
  * The four core read tools (ticket 18), registered together, unregistered
@@ -21,16 +22,30 @@ export interface CoreReadToolsRuntime {
   clock(): string
 }
 
+/** Builds the stable core read tool objects for one runtime. */
+export function createCoreReadTools(runtime: CoreReadToolsRuntime) {
+  return [
+    createReadTool(INSPECT_GARDEN_SPEC, runtime),
+    createReadTool(SEARCH_GARDEN_SPEC, runtime),
+    createReadTool(READ_ITEMS_SPEC, runtime),
+    createReadTool(AUDIT_GARDEN_SPEC, runtime),
+  ] as const
+}
+
+/** The core bundle is useful whenever a connected agent has an open Garden. */
+export function createCoreReadToolsBundle(runtime: CoreReadToolsRuntime): StateAwareToolBundle {
+  return {
+    id: 'core-read',
+    tools: createCoreReadTools(runtime),
+    isRelevant: () => true,
+  }
+}
+
 export async function registerCoreReadTools(
   navigator: unknown,
   runtime: CoreReadToolsRuntime,
   signal: AbortSignal,
 ): Promise<void> {
-  const tools = [
-    createReadTool(INSPECT_GARDEN_SPEC, runtime),
-    createReadTool(SEARCH_GARDEN_SPEC, runtime),
-    createReadTool(READ_ITEMS_SPEC, runtime),
-    createReadTool(AUDIT_GARDEN_SPEC, runtime),
-  ]
+  const tools = createCoreReadTools(runtime)
   await Promise.all(tools.map((tool) => registerModelContextTool(navigator, tool, signal)))
 }

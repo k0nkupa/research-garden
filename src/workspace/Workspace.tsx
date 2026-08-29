@@ -30,7 +30,11 @@ import {
 import { nowAsCanonicalTimestamp } from '../domain/schema/canonicalTimestamp'
 import { browserEntropy, createUlidFactory, type UlidEntropy } from '../domain/schema/ulid'
 import type { GardenFileSystem } from '../filesystem/GardenFileSystem'
-import { registerCoreReadTools } from '../webmcp/coreReadTools'
+import { createCoreReadToolsBundle } from '../webmcp/coreReadTools'
+import {
+  createStateAwareToolRegistration,
+  type ToolRegistrationState,
+} from '../webmcp/stateAwareTools'
 import { AgentAccessPanel } from './AgentAccessPanel'
 import { ChangeDiffPanel } from './ChangeDiffPanel'
 import { ChangeTray } from './ChangeTray'
@@ -253,28 +257,34 @@ export function Workspace({
     return () => window.removeEventListener('focus', onFocus)
   }, [rescanGarden])
 
-  // Ticket 18: `inspect_garden`/`search_garden`/`read_items`/`audit_garden`
-  // are registered only while Agent Access is on, for exactly the current
-  // Agent Access session -- the same on/off gate `agentAccess` itself already
-  // is (ADR 0081), not a state-aware bundle (that finer-grained mechanism is
-  // ticket 19's). One `AbortSignal` covers all four, so Disconnect's abort
-  // unregisters them together (ADR 0083).
-  useEffect(() => {
-    if (!agentAccess) return
+  // Ticket 19: the registration controller owns the compact, state-aware
+  // surface. Future action tickets add their own bundles; the core read bundle
+  // is available for an open Garden only after Agent Access is enabled.
+  const stateAwareRegistration = useMemo(
+    () =>
+      createStateAwareToolRegistration(window.navigator, [
+        createCoreReadToolsBundle({
+          getGarden: () => gardenRef.current,
+          recordActivity: (entry) => setActivity((log) => recordGardenActivity(log, entry)),
+          nextActivityId,
+          clock,
+        }),
+      ]),
+    [clock, nextActivityId],
+  )
 
-    const controller = new AbortController()
-    void registerCoreReadTools(
-      window.navigator,
-      {
-        getGarden: () => gardenRef.current,
-        recordActivity: (entry) => setActivity((log) => recordGardenActivity(log, entry)),
-        nextActivityId,
-        clock,
-      },
-      controller.signal,
-    )
-    return () => controller.abort()
-  }, [agentAccess, clock, nextActivityId])
+  useEffect(() => {
+    const nextState: ToolRegistrationState = {
+      agentAccess,
+      gardenOpen: true,
+      selectedItemId: selectedId,
+      focusedBranchId: view.focusedId,
+      hasPendingChanges: pendingChanges.length > 0,
+    }
+    stateAwareRegistration.update(nextState)
+  }, [agentAccess, pendingChanges.length, selectedId, stateAwareRegistration, view.focusedId])
+
+  useEffect(() => () => stateAwareRegistration.disconnect(), [stateAwareRegistration])
 
   const saveEdit = useCallback(
     async (itemId: string, baseText: string, newBody: string): Promise<EditItemResult> => {
@@ -413,11 +423,15 @@ export function Workspace({
    * has happened.
    */
   const disconnectAgent = useCallback(() => {
+    // Revoke all active bundle signals in the click handler itself. The state
+    // update below is still reflected by the effect, but must not be the first
+    // moment at which the browser loses access (ADR 0083).
+    stateAwareRegistration.disconnect()
     setAgentAccess(false)
     setJustDisconnected(true)
     setActivity((log) => recordGardenActivity(log, activityForDisconnectAgent(nextActivityId(), clock())))
     setPanelMode('connect')
-  }, [clock, nextActivityId])
+  }, [clock, nextActivityId, stateAwareRegistration])
 
   const closeAgentAccessPanel = useCallback(() => {
     setJustDisconnected(false)
