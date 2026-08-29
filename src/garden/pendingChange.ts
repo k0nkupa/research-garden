@@ -40,6 +40,12 @@ interface PendingChangeFields {
   readonly proposedAt: string
 }
 
+/** The identity an exact inspection grants to the apply action. */
+export interface PendingChangeInspectionIdentity {
+  readonly id: string
+  readonly previewHash: string
+}
+
 /**
  * Existing-file proposals are the legacy default when `baseState` is absent;
  * new records state their target existence explicitly. The absent variant is

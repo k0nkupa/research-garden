@@ -38,6 +38,8 @@ const ACTION_LABELS: Record<GardenActivityAction, string> = {
   propose_relation: 'Propose Relation',
   propose_move: 'Propose Move',
   propose_harvest: 'Propose Harvest',
+  list_pending_changes: 'List Pending Changes',
+  inspect_pending_change: 'Inspect Pending Change',
 }
 
 function formatTime(at: string): string {

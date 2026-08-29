@@ -4,7 +4,7 @@
 
 **Blocked by:** 22
 
-**Status:** ready-for-agent
+**Status:** resolved
 
 - [ ] List pending changes returns identified Pending Changes within read bounds
 - [ ] Inspect pending change opens one exact diff for one identified change
@@ -18,3 +18,16 @@
 - [ ] Undo change is scoped to one identified change and permitted only while the current file matches that change's resulting hash
 - [ ] Apply, reject, and undo each appear in the Garden Activity feed with their outcome
 - [ ] No deletion or pruning capability is exposed by any tool
+
+## Answer
+
+Implemented bounded pending-change list and exact-diff inspection tools, with
+apply registered only after the matching inspection identity is present. Apply
+now reuses the verified approval action to recheck permission, hashes,
+one-file scope, schema, and graph invariants before snapshot/write/reread/hash
+confirmation; stale targets remain unwritten. Reject and undo are identified,
+confirmation-marked mutation tools with Activity entries, and undo remains
+available after the final proposal is applied. Focused pending-change tests,
+typecheck, and production build passed. The full Vitest suite was attempted
+but made no progress during worker startup and was stopped without reporting
+test failures.

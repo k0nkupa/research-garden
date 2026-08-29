@@ -16,6 +16,8 @@
 
 export interface ModelContextToolAnnotations {
   readonly readOnlyHint?: boolean
+  /** Standard MCP hint used by hosts to place a human confirmation step. */
+  readonly destructiveHint?: boolean
   readonly untrustedContentHint?: boolean
 }
 

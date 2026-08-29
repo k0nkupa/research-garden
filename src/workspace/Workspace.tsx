@@ -18,6 +18,7 @@ import { openGarden } from '../garden/openGarden'
 import {
   isPendingChangeStale,
   listPendingChanges,
+  type PendingChangeInspectionIdentity,
   type PendingChangeRecord,
 } from '../garden/pendingChange'
 import { rejectChange, type RejectChangeResult } from '../garden/rejectChange'
@@ -34,6 +35,7 @@ import { createCoreReadToolsBundle } from '../webmcp/coreReadTools'
 import { createDirectAdditionToolsBundle } from '../webmcp/directAdditionTools'
 import { createResearchToolsBundles } from '../webmcp/researchTools'
 import { createProposalToolsBundles } from '../webmcp/proposalTools'
+import { createPendingChangeToolsBundles } from '../webmcp/pendingChangeTools'
 import {
   createStateAwareToolRegistration,
   type ToolRegistrationState,
@@ -129,6 +131,11 @@ export function Workspace({
   /** Recomputed alongside `pendingChanges`, from each record's own current-hash check. */
   const [staleChangeIds, setStaleChangeIds] = useState<ReadonlySet<string>>(new Set())
   const [selectedChangeId, setSelectedChangeId] = useState<string | undefined>(undefined)
+  const [inspectedChange, setInspectedChange] = useState<PendingChangeInspectionIdentity | undefined>(undefined)
+  const inspectedChangeRef = useRef(inspectedChange)
+  useEffect(() => {
+    inspectedChangeRef.current = inspectedChange
+  }, [inspectedChange])
   const [agentAccess, setAgentAccess] = useState(false)
   /** True for one render right after Disconnect, so the panel can say what it cannot undo. */
   const [justDisconnected, setJustDisconnected] = useState(false)
@@ -214,6 +221,10 @@ export function Workspace({
       )
       setPendingChanges(changes)
       setStaleChangeIds(new Set(changes.filter((_, index) => staleFlags[index]).map((change) => change.id)))
+      const currentInspection = inspectedChangeRef.current
+      if (currentInspection && !changes.some((change) => change.id === currentInspection.id && change.previewHash === currentInspection.previewHash)) {
+        setInspectedChange(undefined)
+      }
     } catch {
       // Best-effort, matching the Index Cache and rescan's own posture: a
       // Pending Change that cannot currently be listed is not reason enough
@@ -290,9 +301,16 @@ export function Workspace({
         createDirectAdditionToolsBundle(additionsRuntime),
         ...createResearchToolsBundles(coreRuntime),
         ...createProposalToolsBundles(additionsRuntime),
+        ...createPendingChangeToolsBundles({
+          ...additionsRuntime,
+          now,
+          onInspect: setInspectedChange,
+          getInspected: () => inspectedChangeRef.current,
+          onMutation: () => setInspectedChange(undefined),
+        }),
       ])
     },
-    [clock, entropy, nextActivityId],
+    [clock, entropy, nextActivityId, now],
   )
 
   useEffect(() => {
@@ -303,9 +321,10 @@ export function Workspace({
       selectedItemKind: selected?.item.kind,
       focusedBranchId: view.focusedId,
       hasPendingChanges: pendingChanges.length > 0,
+      inspectedChangeId: inspectedChange?.id,
     }
     stateAwareRegistration.update(nextState)
-  }, [agentAccess, pendingChanges.length, selected?.item.kind, selectedId, stateAwareRegistration, view.focusedId])
+  }, [agentAccess, inspectedChange?.id, pendingChanges.length, selected?.item.kind, selectedId, stateAwareRegistration, view.focusedId])
 
   useEffect(() => () => stateAwareRegistration.disconnect(), [stateAwareRegistration])
 
@@ -388,6 +407,7 @@ export function Workspace({
       )
 
       if (result.kind === 'applied') {
+        setInspectedChange(undefined)
         setLastEdit({ itemId: change.itemId, snapshotId: result.snapshotId })
         setSelectedChangeId(undefined)
         setSelectedId(change.itemId)
@@ -413,6 +433,7 @@ export function Workspace({
       )
 
       if (result.kind === 'rejected') {
+        setInspectedChange(undefined)
         const wasSelected = selectedChangeId === change.id
         if (wasSelected) {
           setSelectedChangeId(undefined)
@@ -451,6 +472,7 @@ export function Workspace({
     // moment at which the browser loses access (ADR 0083).
     stateAwareRegistration.disconnect()
     setAgentAccess(false)
+    setInspectedChange(undefined)
     setJustDisconnected(true)
     setActivity((log) => recordGardenActivity(log, activityForDisconnectAgent(nextActivityId(), clock())))
     setPanelMode('connect')

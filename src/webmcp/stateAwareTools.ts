@@ -14,6 +14,8 @@ export interface ToolRegistrationState {
   readonly selectedItemKind: GardenItemKind | undefined
   readonly focusedBranchId: string | undefined
   readonly hasPendingChanges: boolean
+  /** The one exact Pending Change whose diff was opened most recently. */
+  readonly inspectedChangeId?: string | undefined
 }
 
 /**

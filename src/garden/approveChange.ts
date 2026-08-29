@@ -96,6 +96,18 @@ export async function approveChange(
       }
     }
 
+    // The inspected diff must describe the target text the proposal actually
+    // hashed. Otherwise a tampered operational record could display one base
+    // while its stale check trusted another, even though the canonical write
+    // itself would still be hash-guarded.
+    const baseTextHash = await contentHash(record.baseText)
+    if (baseTextHash !== record.baseHash) {
+      return {
+        kind: 'failed',
+        message: 'This Pending Change record is internally inconsistent and cannot be applied.',
+      }
+    }
+
     if (input.previewHash !== record.previewHash) {
       return {
         kind: 'preview-mismatch',

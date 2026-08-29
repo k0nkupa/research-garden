@@ -46,6 +46,8 @@ export type GardenActivityAction =
   | 'propose_relation'
   | 'propose_move'
   | 'propose_harvest'
+  | 'list_pending_changes'
+  | 'inspect_pending_change'
 export type GardenActivityOutcome = 'success' | 'failure'
 
 export interface GardenActivityEntry {
