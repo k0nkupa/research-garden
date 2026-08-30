@@ -88,6 +88,9 @@ export default defineConfig({
     __SW_VERSION__: JSON.stringify(serviceWorkerVersion),
   },
   build: {
+    // Sites serves client assets from this directory alongside the Worker
+    // entrypoint it receives at dist/server/index.js.
+    outDir: 'dist/client',
     target: 'es2022',
     rollupOptions: {
       input: {
