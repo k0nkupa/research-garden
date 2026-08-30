@@ -1,6 +1,5 @@
 /// <reference types="vitest/config" />
-import { readFileSync } from 'node:fs'
-import { mkdirSync, writeFileSync } from 'node:fs'
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { sites } from '@openai/sites-vite-plugin'
 import { defineConfig, type Plugin } from 'vite'
@@ -65,8 +64,9 @@ function precacheManifestPlugin(): Plugin {
 
 /**
  * Sites deploys the static Vite output behind a Cloudflare Worker.  This
- * minimal ESM entrypoint deliberately delegates every request to the managed
- * asset binding; Research Garden has no server-side application behavior.
+ * minimal ESM entrypoint delegates every request to the managed asset binding.
+ * The asset binding has no implicit document fallback, so `/` maps explicitly
+ * to Vite's generated HTML entrypoint.
  */
 function sitesStaticWorkerPlugin(): Plugin {
   return {
@@ -75,7 +75,7 @@ function sitesStaticWorkerPlugin(): Plugin {
       mkdirSync('dist/server', { recursive: true })
       writeFileSync(
         'dist/server/index.js',
-        "export default { fetch(request, env) { return env.ASSETS.fetch(request) } }\n",
+        "export default { fetch(request, env) { const asset = new URL(request.url).pathname === '/' ? new Request(new URL('/index.html', request.url), request) : request; return env.ASSETS.fetch(asset) } }\n",
       )
     },
   }
