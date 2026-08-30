@@ -1,0 +1,117 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="1440" height="1024" viewBox="0 0 1440 1024" role="img" aria-labelledby="title desc">
+  <title id="title">Research Garden Tree — botanical engraving direction</title>
+  <desc id="desc">Approval prototype showing one permanent trunk and root flare growing from an empty state into young and mature knowledge trees. Parent limbs are solid, cross-links are dashed, and evidence roots sit below soil.</desc>
+  <defs>
+    <style><![CDATA[
+      .title { font: 600 30px 'Literata','Iowan Old Style',Georgia,serif; fill:#21332B; letter-spacing:.01em }
+      .subtitle { font: 15px 'Instrument Sans','Helvetica Neue',Arial,sans-serif; fill:#53645A }
+      .eyebrow { font: 600 11px 'IBM Plex Mono',ui-monospace,Menlo,monospace; letter-spacing:.16em; fill:#7A4E64 }
+      .panel-label { font: 600 18px 'Literata','Iowan Old Style',Georgia,serif; fill:#21332B }
+      .panel-note { font: 12px 'Instrument Sans','Helvetica Neue',Arial,sans-serif; fill:#53645A }
+      .meta { font: 11px 'IBM Plex Mono',ui-monospace,Menlo,monospace; fill:#53645A; letter-spacing:.04em }
+      .node-label { font: 13px 'Literata','Iowan Old Style',Georgia,serif; fill:#21332B; paint-order:stroke; stroke:#EDF3EE; stroke-width:5px; stroke-linejoin:round }
+      .small-label { font: 11px 'Instrument Sans','Helvetica Neue',Arial,sans-serif; fill:#53645A }
+      .panel { fill:#F5F8F4; stroke:#C8D4C9; stroke-width:1 }
+      .soil { stroke:#21332B; stroke-opacity:.34; stroke-width:1.5; stroke-dasharray:3 7; stroke-linecap:round }
+      .trunk { fill:none; stroke:#21332B; stroke-width:14; stroke-linecap:round; stroke-linejoin:round }
+      .trunk-inner { fill:none; stroke:#9CB29B; stroke-width:2; stroke-linecap:round; opacity:.9 }
+      .root { fill:none; stroke:#21332B; stroke-width:4; stroke-linecap:round; opacity:.85 }
+      .root-hair { fill:none; stroke:#9CB29B; stroke-width:1.2; stroke-linecap:round; opacity:.8 }
+      .limb { fill:none; stroke:#21332B; stroke-width:7; stroke-linecap:round; stroke-linejoin:round }
+      .limb-detail { fill:none; stroke:#9CB29B; stroke-width:1.5; stroke-linecap:round }
+      .cross { fill:none; stroke:#9CB29B; stroke-width:2; stroke-dasharray:6 6; stroke-linecap:round }
+      .contradicts { fill:none; stroke:#7A4E64; stroke-width:2.5; stroke-dasharray:7 5; stroke-linecap:round }
+      .root-link { fill:none; stroke:#21332B; stroke-width:3; stroke-linecap:round }
+      .glyph { stroke-width:2.4; stroke-linejoin:round }
+      .glyph-mark { fill:none; stroke:#21332B; stroke-width:1.35; stroke-linecap:round; stroke-linejoin:round }
+      .glyph-mark-on-fill { stroke:#EDF3EE }
+      .legend-line { stroke:#21332B; stroke-width:2.5; stroke-linecap:round }
+      .legend-dash { stroke:#7A4E64; stroke-width:2; stroke-dasharray:6 5; stroke-linecap:round }
+    ]]></style>
+    <pattern id="paper-a" width="32" height="32" patternUnits="userSpaceOnUse">
+      <path d="M4 8l2 1M18 22l1 2M27 6l2-1M9 28l1-1" stroke="#9CB29B" stroke-opacity=".12" stroke-width="1"/>
+    </pattern>
+    <g id="trunk-a">
+      <path class="root" d="M0 0 C-11 18 -30 35 -68 56 C-88 67 -110 74 -132 87 M0 0 C9 22 33 41 70 59 C94 70 115 78 140 92 M0 0 C-3 26 -11 46 -24 72 C-33 87 -48 99 -61 112 M0 0 C4 24 15 48 30 70 C40 85 55 98 70 112"/>
+      <path class="root-hair" d="M-68 56l-20 7M-68 56l-11 17M-132 87l-19 4M-132 87l-12 13M70 59l20 5M70 59l13 17M140 92l18 5M140 92l10 13M-24 72l-14 18M-24 72l-2 22M70 112l12 14M70 112l2 17"/>
+      <path class="trunk" d="M0 18 C-7 -23 -7 -91 2 -160"/>
+      <path class="trunk-inner" d="M1 14 C-2 -27 -3 -93 3 -155"/>
+      <path d="M-6 -44l11 10M-5 -80l10 9M-4 -119l9 8" stroke="#21332B" stroke-width="1.2" opacity=".55"/>
+    </g>
+    <!-- Exact glyph geometry from src/workspace/kindGlyphs.ts, kept as reusable symbols. -->
+    <g id="pod"><path d="M-5,-9 L5,-9 C8,-2 7,4 0,11 C-7,4 -8,-2 -5,-9 Z"/><path class="glyph-mark" d="M0,-3 L0,4"/></g>
+    <g id="evidence-node"><path d="M-9,-7 L9,-7 L9,7 L-9,7 Z"/><path class="glyph-mark" d="M-5,-2 L5,-2 M-5,2 L2,2"/></g>
+    <g id="junction"><path d="M0,-9 L9,0 L0,9 L-9,0 L0,-9 Z"/><path class="glyph-mark" d="M0,3 L0,-1 M0,-1 L-3,-4 M0,-1 L3,-4"/></g>
+    <g id="filled-leaf"><path d="M-3,11 C-11,4 -9,-7 4,-12 C9,-3 6,8 -3,11 Z"/><path class="glyph-mark glyph-mark-on-fill" d="M-1,7 L1,-7"/></g>
+    <g id="open-ring"><path d="M0,-9 A9,9 0 1,1 -0.01,-9" fill="none"/><path class="glyph-mark" d="M0,-2 L0,0"/></g>
+    <g id="bud"><path d="M0,-11 C5,-6 7,0 5,9 L-5,9 C-7,0 -5,-6 0,-11 Z"/><path class="glyph-mark" d="M0,4 L0,-3"/></g>
+    <g id="lens"><path d="M-11,0 C-6,-7 6,-7 11,0 C6,7 -6,7 -11,0 Z"/><path class="glyph-mark" d="M-2,0 A2,2 0 1,1 2,0 A2,2 0 1,1 -2,0"/></g>
+    <g id="fruit"><path d="M0,-10 L9,-5 L9,5 L0,10 L-9,5 L-9,-5 Z"/><path class="glyph-mark glyph-mark-on-fill" d="M-3,-2 L-3,-1 M0,-3 L0,-2 M3,-2 L3,-1 M-2,2 L-2,3 M2,2 L2,3"/></g>
+  </defs>
+
+  <rect width="1440" height="1024" fill="#EDF3EE"/>
+  <rect x="34" y="30" width="1372" height="964" rx="18" fill="url(#paper-a)" stroke="#D2DDD3"/>
+  <text x="72" y="83" class="eyebrow">RESEARCH GARDEN / TREE VISUAL DIRECTION A</text>
+  <text x="72" y="123" class="title">Botanical engraving</text>
+  <text x="72" y="151" class="subtitle">A quiet, hand-drawn trunk makes room for knowledge to become the visible canopy.</text>
+  <text x="1368" y="83" text-anchor="end" class="meta">APPROVAL PROTOTYPE · SVG ONLY</text>
+
+  <!-- The same permanent trunk/root base is reused in all three growth states. -->
+  <g transform="translate(72 190)"><rect width="1296" height="548" rx="12" class="panel"/>
+    <text x="28" y="39" class="eyebrow">01 / EMPTY</text><text x="28" y="67" class="panel-label">Plain trunk</text><text x="28" y="89" class="panel-note">No knowledge yet — no limbs.</text>
+    <text x="438" y="39" class="eyebrow">02 / YOUNG</text><text x="438" y="67" class="panel-label">First growth</text><text x="438" y="89" class="panel-note">Parent limbs attach as items arrive.</text>
+    <text x="878" y="39" class="eyebrow">03 / MATURE</text><text x="878" y="67" class="panel-label">Living canopy</text><text x="878" y="89" class="panel-note">Hierarchy, evidence, and contradiction.</text>
+    <g transform="translate(214 430)"><line class="soil" x1="-174" y1="0" x2="174" y2="0"/><use xlink:href="#trunk-a"/></g>
+    <g transform="translate(650 430)"><line class="soil" x1="-200" y1="0" x2="200" y2="0"/><use xlink:href="#trunk-a"/>
+      <path class="limb" d="M0 -142 C-36 -184 -90 -211 -148 -229"/><path class="limb-detail" d="M-3 -142 C-38 -181 -89 -207 -145 -225"/>
+      <path class="limb" d="M1 -102 C34 -142 85 -169 139 -179"/><path class="limb-detail" d="M3 -103 C36 -139 84 -165 136 -175"/>
+      <g transform="translate(-164 -233)"><use href="#pod" class="glyph" fill="#9CB29B" stroke="#21332B"/><text x="18" y="4" class="node-label">Seed</text></g>
+      <g transform="translate(155 -183)"><use href="#junction" class="glyph" fill="#21332B" stroke="#21332B"/><text x="17" y="4" class="node-label">Branch</text></g>
+    </g>
+    <g transform="translate(980 430)"><line class="soil" x1="-244" y1="0" x2="244" y2="0"/><use xlink:href="#trunk-a"/>
+      <!-- Solid paths are parent limbs; every path is separate from the permanent base. -->
+      <path class="limb" d="M0 -141 C-40 -185 -117 -214 -205 -226"/><path class="limb-detail" d="M-3 -141 C-42 -182 -115 -210 -202 -222"/>
+      <path class="limb" d="M0 -107 C-9 -160 -22 -200 -41 -244"/><path class="limb-detail" d="M-2 -108 C-10 -159 -20 -198 -38 -241"/>
+      <path class="limb" d="M1 -103 C43 -151 104 -181 184 -192"/><path class="limb-detail" d="M3 -104 C45 -148 104 -177 181 -188"/>
+      <path class="limb" d="M-39 -244 C-70 -271 -92 -287 -123 -299"/><path class="limb-detail" d="M-40 -246 C-68 -269 -91 -284 -120 -295"/>
+      <path class="limb" d="M184 -192 C211 -226 225 -250 235 -279"/><path class="limb-detail" d="M186 -193 C211 -223 223 -248 232 -276"/>
+      <!-- evidence Roots stay below soil -->
+      <path class="root-link" d="M-15 42 C-72 76 -118 105 -175 125"/><path class="root-link" d="M8 48 C67 82 116 107 176 128"/>
+      <path class="root-hair" d="M-175 125l-18 6M-175 125l-12 13M176 128l18 4M176 128l10 14"/>
+      <!-- A dashed mulberry cross-link is not a parent limb. -->
+      <path class="contradicts" d="M-123 -305 Q18 -345 235 -285"/>
+      <g transform="translate(-221 -232)"><use href="#pod" class="glyph" fill="#9CB29B" stroke="#21332B"/><text x="-4" y="31" class="node-label">Seed</text></g>
+      <g transform="translate(-41 -258)"><use href="#filled-leaf" class="glyph" fill="#3C6B53" stroke="#3C6B53"/><text x="-27" y="31" class="node-label">Claim</text></g>
+      <g transform="translate(202 -199)"><use href="#junction" class="glyph" fill="#21332B" stroke="#21332B"/><text x="-12" y="31" class="node-label">Branch</text></g>
+      <g transform="translate(-127 -313)"><use href="#open-ring" class="glyph" fill="#F5F8F4" stroke="#7A4E64"/><text x="-26" y="31" class="node-label">Question</text></g>
+      <g transform="translate(239 -293)"><use href="#bud" class="glyph" fill="#F5F8F4" stroke="#D6A63A"/><text x="-12" y="31" class="node-label">Idea</text></g>
+      <g transform="translate(-179 129)"><use href="#evidence-node" class="glyph" fill="#F5F8F4" stroke="#21332B"/><text x="-24" y="31" class="node-label">Root</text></g>
+      <g transform="translate(179 132)"><use href="#lens" class="glyph" fill="#F5F8F4" stroke="#9CB29B"/><text x="-42" y="31" class="node-label">Observation</text></g>
+      <g transform="translate(251 -284)"><use href="#fruit" class="glyph" fill="#D6A63A" stroke="#D6A63A"/><text x="-25" y="49" class="node-label">Harvest</text></g>
+      <text x="-230" y="176" class="small-label">evidence Root</text><text x="153" y="177" class="small-label">below soil</text>
+      <text x="-46" y="-312" class="small-label" fill="#7A4E64">Contradicts</text>
+    </g>
+  </g>
+
+  <g transform="translate(72 770)"><text class="eyebrow" x="0" y="0">COMPONENT STRIP / THE DYNAMIC SEAM</text>
+    <g transform="translate(0 26)"><rect width="1296" height="175" rx="12" fill="#F5F8F4" stroke="#C8D4C9"/>
+      <g transform="translate(82 116)"><use href="#trunk-a" transform="scale(.45)"/><text x="-30" y="62" class="small-label">permanent</text><text x="-30" y="77" class="small-label">trunk + roots</text></g>
+      <g transform="translate(265 105)"><path class="limb" d="M-46 30 C-15 3 10 -10 48 -26"/><path class="limb-detail" d="M-45 27 C-13 2 11 -12 45 -23"/><use href="#junction" class="glyph" transform="translate(60 -31) scale(.75)" fill="#21332B" stroke="#21332B"/><text x="-52" y="68" class="small-label">parent limb</text></g>
+      <g transform="translate(464 105)"><path class="root-link" d="M-48 -15 C-10 3 11 20 47 35"/><use href="#evidence-node" class="glyph" transform="translate(60 41) scale(.72)" fill="#F5F8F4" stroke="#21332B"/><text x="-54" y="68" class="small-label">evidence Root</text></g>
+      <g transform="translate(655 93)"><line class="soil" x1="-70" y1="0" x2="70" y2="0"/><path class="root" d="M-42 4C-28 22-13 33 0 40M10 4C26 21 39 29 53 38" transform="scale(.65)"/><text x="-33" y="68" class="small-label">soil line</text></g>
+      <g transform="translate(800 45)"><text class="meta" x="0" y="0">KIND GLYPHS / SHAPE + MARK + LABEL + TONE</text>
+        <g transform="translate(20 39)"><use href="#pod" class="glyph" fill="#9CB29B" stroke="#21332B"/><text x="-18" y="30" class="small-label">Seed</text></g>
+        <g transform="translate(80 39)"><use href="#evidence-node" class="glyph" fill="#F5F8F4" stroke="#21332B"/><text x="-18" y="30" class="small-label">Root</text></g>
+        <g transform="translate(140 39)"><use href="#junction" class="glyph" fill="#21332B" stroke="#21332B"/><text x="-25" y="30" class="small-label">Branch</text></g>
+        <g transform="translate(200 39)"><use href="#filled-leaf" class="glyph" fill="#3C6B53" stroke="#3C6B53"/><text x="-22" y="30" class="small-label">Claim</text></g>
+        <g transform="translate(260 39)"><use href="#open-ring" class="glyph" fill="#F5F8F4" stroke="#7A4E64"/><text x="-31" y="30" class="small-label">Question</text></g>
+        <g transform="translate(320 39)"><use href="#bud" class="glyph" fill="#F5F8F4" stroke="#D6A63A"/><text x="-18" y="30" class="small-label">Idea</text></g>
+        <g transform="translate(390 39)"><use href="#lens" class="glyph" fill="#F5F8F4" stroke="#9CB29B"/><text x="-36" y="30" class="small-label">Observation</text></g>
+        <g transform="translate(470 39)"><use href="#fruit" class="glyph" fill="#D6A63A" stroke="#D6A63A"/><text x="-31" y="30" class="small-label">Harvest</text></g>
+      </g>
+      <g transform="translate(800 133)"><line class="legend-line" x1="0" y1="0" x2="38" y2="0"/><text x="48" y="4" class="small-label">Parent limb</text><line class="legend-dash" x1="148" y1="0" x2="186" y2="0"/><text x="196" y="4" class="small-label">Contradicts cross-link</text></g>
+    </g>
+  </g>
+  <text x="72" y="997" class="meta">A — fine ink, layered bark strokes, sparse botanical detail. Designed to keep dynamic labels and paths readable at every growth stage.</text>
+</svg>

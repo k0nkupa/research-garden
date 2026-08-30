@@ -34,6 +34,15 @@ describe('the bare trunk entry screen', () => {
     expect(trunk).toHaveAttribute('aria-hidden', 'true')
   })
 
+  it('keeps the entry illustration branch-free', () => {
+    const { container } = render(<ApplicationShell readiness={ready} />)
+
+    const trunk = container.querySelector('[data-testid="bare-trunk"]')
+    expect(trunk?.querySelectorAll('[data-role="parent-limb"]')).toHaveLength(0)
+    expect(trunk?.querySelectorAll('[data-role="permanent-trunk"]')).toHaveLength(1)
+    expect(trunk?.querySelectorAll('.bare-trunk__trunk path')).toHaveLength(2)
+  })
+
   it('shows no marketing landing page in place of the Garden', () => {
     render(<ApplicationShell readiness={ready} />)
 

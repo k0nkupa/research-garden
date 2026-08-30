@@ -164,12 +164,20 @@ describe('computing the Tree layout', () => {
     expect(layout.viewBox.height).toBeGreaterThan(0)
   })
 
-  it('lays out an empty Garden without failing', async () => {
+  it('keeps an empty Garden branch-free', async () => {
     const layout = await layoutOf([])
 
     expect(layout.nodes).toEqual([])
     expect(layout.links).toEqual([])
     expect(layout.viewBox.width).toBeGreaterThan(0)
+  })
+
+  it('ends the permanent trunk at the top-level limb seam', async () => {
+    const layout = await layoutOf([{ id: ATTENTION, title: 'Attention' }])
+
+    expect(layout.trunk.path).toContain('2,-150')
+    expect(layout.links.find((link) => link.sourceId === undefined)?.path).toMatch(/^M0,-150 /)
+    expect(layout.trunk.detailPath).toMatch(/^M1,14 C/)
   })
 
   // The layout is derived from the index, so opening the same Garden twice must

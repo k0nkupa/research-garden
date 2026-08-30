@@ -97,11 +97,26 @@ body {
 
 .bare-trunk__trunk {
   stroke-width: 3.5;
+  stroke-linejoin: round;
+}
+
+.bare-trunk__trunk path[data-layer='detail'] {
+  stroke: var(--lichen);
+  stroke-width: 1.1;
+  stroke-opacity: 0.9;
 }
 
 .bare-trunk__roots {
   stroke-width: 2;
-  stroke-opacity: 0.45;
+  stroke-opacity: 0.78;
+}
+
+.bare-trunk__root-hairs {
+  fill: none;
+  stroke: var(--lichen);
+  stroke-width: 1.1;
+  stroke-linecap: round;
+  stroke-opacity: 0.8;
 }
 
 .bare-trunk__soil {
@@ -395,11 +410,20 @@ body {
 .garden-tree__links path {
   fill: none;
   stroke: var(--bark);
-  stroke-width: 2;
-  stroke-opacity: 0.5;
+  stroke-width: 7;
+  stroke-opacity: 0.9;
+  stroke-linecap: round;
+  stroke-linejoin: round;
   /* On the base rule, not only `--dimmed`, so a limb fades back in when a
      selection clears exactly as smoothly as it faded out (ADR 0045). */
   transition: opacity 120ms ease-out;
+}
+
+/* The inner lichen line is a visual detail layer, never a second relationship. */
+.garden-tree__link-detail {
+  stroke: var(--lichen);
+  stroke-width: 1.5;
+  stroke-opacity: 0.9;
 }
 
 .garden-tree__node {
@@ -417,7 +441,15 @@ body {
 .garden-tree__trunk {
   fill: none;
   stroke: var(--bark);
-  stroke-width: 7;
+  stroke-width: 9;
+  stroke-linecap: round;
+  stroke-opacity: 0.9;
+}
+
+.garden-tree__trunk-detail {
+  fill: none;
+  stroke: var(--lichen);
+  stroke-width: 1.5;
   stroke-linecap: round;
   stroke-opacity: 0.9;
 }
@@ -425,9 +457,17 @@ body {
 .garden-tree__root-flare {
   fill: none;
   stroke: var(--bark);
-  stroke-width: 2;
+  stroke-width: 3.5;
   stroke-linecap: round;
-  stroke-opacity: 0.18;
+  stroke-opacity: 0.78;
+}
+
+.garden-tree__root-hair {
+  fill: none;
+  stroke: var(--lichen);
+  stroke-width: 1.2;
+  stroke-linecap: round;
+  stroke-opacity: 0.8;
 }
 
 .garden-tree__soil {

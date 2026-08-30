@@ -1,6 +1,8 @@
 /// <reference types="vitest/config" />
 import { readFileSync } from 'node:fs'
+import { mkdirSync, writeFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
+import { sites } from '@openai/sites-vite-plugin'
 import { defineConfig, type Plugin } from 'vite'
 import react from '@vitejs/plugin-react'
 
@@ -61,9 +63,27 @@ function precacheManifestPlugin(): Plugin {
   }
 }
 
+/**
+ * Sites deploys the static Vite output behind a Cloudflare Worker.  This
+ * minimal ESM entrypoint deliberately delegates every request to the managed
+ * asset binding; Research Garden has no server-side application behavior.
+ */
+function sitesStaticWorkerPlugin(): Plugin {
+  return {
+    name: 'research-garden-sites-static-worker',
+    closeBundle() {
+      mkdirSync('dist/server', { recursive: true })
+      writeFileSync(
+        'dist/server/index.js',
+        "export default { fetch(request, env) { return env.ASSETS.fetch(request) } }\n",
+      )
+    },
+  }
+}
+
 // Client-only build: no SSR and no application data backend (ADR 0002, ADR 0048).
 export default defineConfig({
-  plugins: [react(), precacheManifestPlugin()],
+  plugins: [react(), precacheManifestPlugin(), sitesStaticWorkerPlugin(), sites()],
   define: {
     __SW_VERSION__: JSON.stringify(serviceWorkerVersion),
   },

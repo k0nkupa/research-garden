@@ -102,6 +102,15 @@ describe('the Tree', () => {
     expect(screen.queryAllByRole('treeitem')).toEqual([])
   })
 
+  it('renders an empty Garden with only the permanent base, never a knowledge limb', async () => {
+    await renderWorkspace([])
+
+    const tree = screen.getByRole('tree')
+    expect(tree.querySelectorAll('[data-role="parent-limb"]')).toHaveLength(0)
+    expect(tree.querySelectorAll('[data-role="permanent-trunk"]')).toHaveLength(2)
+    expect(tree.querySelectorAll('[data-role="root-flare"]')).toHaveLength(4)
+  })
+
   it('names the Garden Repository so a person knows which folder is open', async () => {
     await renderWorkspace(oneBranch)
 

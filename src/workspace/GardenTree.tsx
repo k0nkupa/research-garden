@@ -283,29 +283,68 @@ export function GardenTree({
             y2={layout.trunk.soilY}
           />
           {layout.trunk.rootPaths.map((path) => (
-            <path key={path} className="garden-tree__root-flare" d={path} />
+            <path
+              key={path}
+              className="garden-tree__root-flare"
+              data-role="root-flare"
+              data-layer="structural"
+              d={path}
+            />
           ))}
-          <path className="garden-tree__trunk" d={layout.trunk.path} />
+          {layout.trunk.rootHairPaths.map((path) => (
+            <path
+              key={path}
+              className="garden-tree__root-hair"
+              data-role="root-hair"
+              data-layer="detail"
+              d={path}
+            />
+          ))}
+          <path
+            className="garden-tree__trunk"
+            data-role="permanent-trunk"
+            data-layer="structural"
+            d={layout.trunk.path}
+          />
+          <path
+            className="garden-tree__trunk-detail"
+            data-role="permanent-trunk"
+            data-layer="detail"
+            d={layout.trunk.detailPath}
+          />
         </g>
 
         <g className="garden-tree__links" aria-hidden="true">
-          {layout.links.map((link) => (
-            <path
-              key={`${link.sourceId ?? 'trunk'}->${link.targetId}`}
-              // Softened once anything is illuminated, unless the limb touches a
-              // lit node -- otherwise a glowing node would hang off a line that
-              // read as unrelated (ADR 0045). A limb from the trunk is judged by
-              // the item on its far end alone.
-              className={
-                tracing &&
-                !(link.sourceId !== undefined && isLit(link.sourceId)) &&
-                !isLit(link.targetId)
-                  ? 'garden-tree__link--dimmed'
-                  : undefined
-              }
-              d={link.path}
-            />
-          ))}
+          {layout.links.map((link) => {
+            const key = `${link.sourceId ?? 'trunk'}->${link.targetId}`
+            // Softened once anything is illuminated, unless the limb touches a
+            // lit node -- both visual layers must fade as one (ADR 0045).
+            const dimmed =
+              tracing &&
+              !(link.sourceId !== undefined && isLit(link.sourceId)) &&
+              !isLit(link.targetId)
+
+            return (
+              <g key={key} data-role="parent-limb" data-link-key={key}>
+                <path
+                  className={dimmed ? 'garden-tree__link garden-tree__link--dimmed' : 'garden-tree__link'}
+                  data-role="parent-limb"
+                  data-layer="structural"
+                  d={link.path}
+                />
+                <path
+                  className={
+                    dimmed
+                      ? 'garden-tree__link-detail garden-tree__link--dimmed'
+                      : 'garden-tree__link-detail'
+                  }
+                  data-role="parent-limb"
+                  data-layer="detail"
+                  d={link.path}
+                />
+              </g>
+            )
+          })}
         </g>
 
         {/*

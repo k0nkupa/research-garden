@@ -68,8 +68,12 @@ export interface TreeViewBox {
 export interface TreeTrunk {
   /** The trunk itself, from the root flare up to where the limbs begin. */
   readonly path: string
+  /** A fine inner stroke that gives the permanent trunk its engraved grain. */
+  readonly detailPath: string
   /** The spreading roots below the soil line. */
   readonly rootPaths: readonly string[]
+  /** Fine root hairs, derived alongside the spreading roots. */
+  readonly rootHairPaths: readonly string[]
   readonly soilY: number
   readonly soilFrom: number
   readonly soilTo: number
@@ -316,9 +320,10 @@ function trunkFor(nodes: readonly TreeNode[]): TreeTrunk {
   const deepest = buried.length === 0 ? SOIL_Y + ROOT_DROP : Math.max(...buried.map((n) => n.y))
 
   return {
-    // Stops short of the first canopy generation so the trunk never runs
-    // through a Branch's glyph or its label.
-    path: `M0,${SOIL_Y + 18} L0,${SOIL_Y - TRUNK_HEIGHT + 30}`,
+    // The organic curve reaches the top-level limb seam at -TRUNK_HEIGHT. It
+    // remains clear of the first node while removing the old 30-unit gap.
+    path: `M0,${SOIL_Y + 18} C-7,${SOIL_Y - 23} -7,${SOIL_Y - 91} 2,${SOIL_Y - TRUNK_HEIGHT}`,
+    detailPath: `M1,${SOIL_Y + 14} C-2,${SOIL_Y - 27} -3,${SOIL_Y - 93} 3,${SOIL_Y - TRUNK_HEIGHT + 5}`,
     /*
      * Fine rootlets, kept deliberately short. The limbs down to the evidence
      * are the real root system; these only suggest the rest of it. Drawing
@@ -329,6 +334,12 @@ function trunkFor(nodes: readonly TreeNode[]): TreeTrunk {
       const toX = spread * SIBLING_SPACING * 0.55
       const toY = SOIL_Y + (deepest - SOIL_Y) * 0.4
       return `M0,${SOIL_Y} C${toX * 0.2},${SOIL_Y + 26} ${toX * 0.65},${toY * 0.7} ${toX},${toY}`
+    }),
+    rootHairPaths: [-1, -0.4, 0.4, 1].map((spread) => {
+      const toX = spread * SIBLING_SPACING * 0.55
+      const toY = SOIL_Y + (deepest - SOIL_Y) * 0.4
+      const direction = toX < 0 ? -1 : 1
+      return `M${toX},${toY} l${direction * 16},6 M${toX},${toY} l${direction * 9},12`
     }),
     soilY: SOIL_Y,
     soilFrom,
