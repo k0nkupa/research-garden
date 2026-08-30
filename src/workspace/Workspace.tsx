@@ -31,11 +31,7 @@ import {
 import { nowAsCanonicalTimestamp } from '../domain/schema/canonicalTimestamp'
 import { browserEntropy, createUlidFactory, type UlidEntropy } from '../domain/schema/ulid'
 import type { GardenFileSystem } from '../filesystem/GardenFileSystem'
-import { createCoreReadToolsBundle } from '../webmcp/coreReadTools'
-import { createDirectAdditionToolsBundle } from '../webmcp/directAdditionTools'
-import { createResearchToolsBundles } from '../webmcp/researchTools'
-import { createProposalToolsBundles } from '../webmcp/proposalTools'
-import { createPendingChangeToolsBundles } from '../webmcp/pendingChangeTools'
+import { createGardenToolBundles } from '../webmcp/gardenToolBundles'
 import {
   createStateAwareToolRegistration,
   type ToolRegistrationState,
@@ -296,19 +292,13 @@ export function Workspace({
         refreshGarden: () => rescanGardenRef.current(),
         entropy,
       }
-      return createStateAwareToolRegistration(window.navigator, [
-        createCoreReadToolsBundle(coreRuntime),
-        createDirectAdditionToolsBundle(additionsRuntime),
-        ...createResearchToolsBundles(coreRuntime),
-        ...createProposalToolsBundles(additionsRuntime),
-        ...createPendingChangeToolsBundles({
-          ...additionsRuntime,
-          now,
-          onInspect: setInspectedChange,
-          getInspected: () => inspectedChangeRef.current,
-          onMutation: () => setInspectedChange(undefined),
-        }),
-      ])
+      return createStateAwareToolRegistration(window.navigator, createGardenToolBundles({
+        ...additionsRuntime,
+        now,
+        onInspect: setInspectedChange,
+        getInspected: () => inspectedChangeRef.current,
+        onMutation: () => setInspectedChange(undefined),
+      }))
     },
     [clock, entropy, nextActivityId, now],
   )
