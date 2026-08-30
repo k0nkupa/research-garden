@@ -80,11 +80,23 @@ const NOTHING_DIAGNOSED: ReadonlySet<string> = new Set()
 const MINIMUM_SCALE = 0.3
 const MAXIMUM_SCALE = 3
 const ZOOM_STEP = 1.15
+const PAN_START_DISTANCE = 4
 
 interface Viewport {
   readonly x: number
   readonly y: number
   readonly scale: number
+}
+
+interface PendingPan {
+  /** Viewport position at pointer-down, used to keep the drag anchored. */
+  readonly x: number
+  readonly y: number
+  /** Pointer position at pointer-down, used to distinguish a click from a pan. */
+  readonly originX: number
+  readonly originY: number
+  readonly pointerId: number
+  readonly captured: boolean
 }
 
 const AT_REST: Viewport = { x: 0, y: 0, scale: 1 }
@@ -135,7 +147,7 @@ export function GardenTree({
 
   const [viewport, setViewport] = useState<Viewport>(AT_REST)
   const [keyboardId, setKeyboardId] = useState<string | undefined>(undefined)
-  const panningFrom = useRef<{ x: number; y: number } | undefined>(undefined)
+  const panningFrom = useRef<PendingPan | undefined>(undefined)
   const svg = useRef<SVGSVGElement>(null)
   /** Set when a keypress moved the current node, so focus follows it there. */
   const followFocus = useRef(false)
@@ -220,18 +232,34 @@ export function GardenTree({
       data-testid="tree-canvas"
       onPointerDown={(event) => {
         // Primary button only: a right-click opens a context menu and never
-        // sends a matching pointerup here, which would leave the Tree panning
-        // on buttonless movement.
+        // starts a pan.
         if (event.button !== 0) return
 
-        panningFrom.current = { x: event.clientX - viewport.x, y: event.clientY - viewport.y }
-        // Captured so a drag that leaves the pane keeps working, and so its
-        // release is always heard.
-        event.currentTarget.setPointerCapture?.(event.pointerId)
+        // Do not capture until this becomes a drag. Capturing on every
+        // pointer-down retargets the pointer-up to the canvas, which prevents
+        // a Tree node beneath it from receiving its native click event.
+        panningFrom.current = {
+          x: event.clientX - viewport.x,
+          y: event.clientY - viewport.y,
+          originX: event.clientX,
+          originY: event.clientY,
+          pointerId: event.pointerId,
+          captured: false,
+        }
       }}
       onPointerMove={(event) => {
         const from = panningFrom.current
-        if (!from) return
+        if (!from || from.pointerId !== event.pointerId) return
+
+        const moved = Math.hypot(event.clientX - from.originX, event.clientY - from.originY)
+        if (!from.captured && moved < PAN_START_DISTANCE) return
+
+        if (!from.captured) {
+          // Once a drag is intentional, keep it alive outside the pane and
+          // make its release belong to the canvas rather than the node.
+          event.currentTarget.setPointerCapture?.(event.pointerId)
+          panningFrom.current = { ...from, captured: true }
+        }
 
         setViewport((at) => ({
           ...at,
@@ -240,8 +268,11 @@ export function GardenTree({
         }))
       }}
       onPointerUp={(event) => {
+        const from = panningFrom.current
+        if (!from || from.pointerId !== event.pointerId) return
+
         panningFrom.current = undefined
-        event.currentTarget.releasePointerCapture?.(event.pointerId)
+        if (from.captured) event.currentTarget.releasePointerCapture?.(event.pointerId)
       }}
       onPointerCancel={() => {
         panningFrom.current = undefined

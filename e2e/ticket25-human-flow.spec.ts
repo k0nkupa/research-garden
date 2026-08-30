@@ -58,8 +58,9 @@ test('creates, reads, and edits a Sample Garden through the human interface', as
   await expect(page.getByRole('button', { name: /Focused on Deliberate practice/i })).toHaveCount(0)
 
   const claim = page.getByRole('treeitem', { name: /Most of expertise is deliberate practice/i })
-  await claim.focus()
-  await claim.press('Enter')
+  // A real pointer selection must reach the Tree node rather than being
+  // swallowed by the canvas's pan gesture.
+  await claim.click()
   await expect(page.getByRole('complementary')).toContainText('Expert performance is chiefly')
   await expect(page.locator('[data-relation="contradicts"]')).toHaveCount(1)
   await expect(page.getByRole('treeitem')).toHaveCount(8)
