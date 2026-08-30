@@ -739,6 +739,47 @@ body {
   justify-content: center;
 }
 
+/*
+ * Agent Access is a deliberate consent moment, not another document in the
+ * reader. Centre a compact decision card in the reader pane so its purpose is
+ * immediately clear, while preserving the same panel boundary as the rest of
+ * the workspace.
+ */
+.agent-access-panel {
+  display: grid;
+  place-items: center;
+}
+
+.agent-access-panel__content {
+  width: min(100%, 27rem);
+  text-align: center;
+}
+
+.agent-access-panel .item-panel__header {
+  text-align: center;
+}
+
+.agent-access-panel .item-panel__kind {
+  margin-bottom: 0.5rem;
+}
+
+.agent-access-panel .item-panel__title {
+  margin-bottom: 1rem;
+}
+
+.agent-access-panel .item-panel__invitation {
+  max-width: 34ch;
+  margin: 0 auto 1rem;
+  line-height: 1.5;
+}
+
+.agent-access-panel .item-panel__actions {
+  width: min(100%, 16rem);
+  margin: 1.5rem auto 0;
+  flex-direction: column;
+  align-items: stretch;
+}
+
 .item-panel__invitation {
   font-family: var(--control);
   font-size: 0.9rem;
