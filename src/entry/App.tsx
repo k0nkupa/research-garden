@@ -12,7 +12,10 @@ import { ApplicationShell } from './ApplicationShell'
 import { PermissionLapsed } from './PermissionLapsed'
 
 function readReadiness(): Readiness {
-  return resolveReadiness(detectCapabilities(window))
+  return resolveReadiness(detectCapabilities(window), {
+    width: window.innerWidth,
+    height: window.innerHeight,
+  })
 }
 
 /**
@@ -32,7 +35,7 @@ function readReadiness(): Readiness {
  * second call ever seeing a "this name is already registered" failure from
  * the first.
  */
-export function App() {
+export function App({ explorerMode = 'legacy' }: { readonly explorerMode?: 'legacy' | 'living' } = {}) {
   const [readiness, setReadiness] = useState<Readiness>(readReadiness)
   const {
     session,
@@ -52,9 +55,11 @@ export function App() {
     const resolve = () => setReadiness(readReadiness())
 
     resolve()
+    window.addEventListener('resize', resolve)
     window.addEventListener('online', resolve)
     window.addEventListener('offline', resolve)
     return () => {
+      window.removeEventListener('resize', resolve)
       window.removeEventListener('online', resolve)
       window.removeEventListener('offline', resolve)
     }
@@ -73,7 +78,7 @@ export function App() {
   }
 
   if (session.kind === 'open') {
-    return <Workspace garden={session.garden} agentInterface={readiness.agentInterface} sourceMode={session.sourceMode} onDiscardImported={discardImported} />
+    return <Workspace garden={session.garden} agentInterface={readiness.agentInterface} sourceMode={session.sourceMode} onDiscardImported={discardImported} explorerMode={explorerMode} />
   }
 
   if (session.kind === 'already-a-garden') {

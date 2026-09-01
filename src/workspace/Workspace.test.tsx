@@ -34,6 +34,7 @@ ${body}
 
 async function renderWorkspace(
   files: { id: string; title: string; body: string; parentId?: string }[],
+  explorerMode: 'legacy' | 'living' = 'legacy',
 ) {
   const index = await buildGardenIndex(
     files.map((file, position) => ({
@@ -41,7 +42,7 @@ async function renderWorkspace(
       text: branchFile(file.id, file.title, file.body, file.parentId),
     })),
   )
-  return render(<Workspace garden={{ repositoryName: 'my-garden', index, fileSystem: emptyRepository() }} />)
+  return render(<Workspace explorerMode={explorerMode} garden={{ repositoryName: 'my-garden', index, fileSystem: emptyRepository() }} />)
 }
 
 const oneBranch = [{ id: ATTENTION, title: 'Attention mechanisms', body: 'What I am collecting.' }]
@@ -109,6 +110,13 @@ describe('the Tree', () => {
     expect(tree.querySelectorAll('[data-role="parent-limb"]')).toHaveLength(0)
     expect(tree.querySelectorAll('[data-role="permanent-trunk"]')).toHaveLength(2)
     expect(tree.querySelectorAll('[data-role="root-flare"]')).toHaveLength(4)
+  })
+
+  it('keeps the living explorer opt-in rather than inferred from active Branches', async () => {
+    await renderWorkspace(oneBranch, 'living')
+
+    expect(screen.getAllByText('Garden map').length).toBeGreaterThan(0)
+    expect(screen.getByRole('treeitem', { name: /Attention mechanisms/ })).toBeInTheDocument()
   })
 
   it('names the Garden Repository so a person knows which folder is open', async () => {

@@ -1,5 +1,11 @@
 import { useRef, type ChangeEvent, type ReactNode } from 'react'
-import { type AgentInterfaceStatus, type MissingCapability, type Readiness } from '../capabilities/capabilities'
+import {
+  MINIMUM_WORKSPACE_HEIGHT,
+  MINIMUM_WORKSPACE_WIDTH,
+  type AgentInterfaceStatus,
+  type MissingCapability,
+  type Readiness,
+} from '../capabilities/capabilities'
 import { BareTrunk } from './BareTrunk'
 
 export interface ApplicationShellProps {
@@ -41,6 +47,10 @@ export function ApplicationShell({
     if (event.target.files) onImportGarden?.(event.target.files)
     event.target.value = ''
   }
+  if (readiness.kind === 'unsupported-viewport') {
+    return <UnsupportedViewport />
+  }
+
   if (readiness.kind === 'unsupported-browser') {
     return <UnsupportedBrowser missing={readiness.missing} />
   }
@@ -171,6 +181,26 @@ function UnsupportedBrowser({ missing }: { readonly missing: MissingCapability }
           back to &mdash; that is the point of the product.
         </p>
         <p>A current desktop Chromium browser &mdash; Chrome or Edge &mdash; provides it.</p>
+      </div>
+    </main>
+  )
+}
+
+function UnsupportedViewport() {
+  return (
+    <main className="shell shell--explanation">
+      <div className="explanation">
+        <h1>Research Garden needs a desktop browser</h1>
+        <p>
+          The Garden workspace puts a navigable Tree, a selected item, and the Change Tray
+          side by side, and it needs room to do that. This screen is smaller than the{' '}
+          {MINIMUM_WORKSPACE_WIDTH}&times;{MINIMUM_WORKSPACE_HEIGHT} the workspace is designed for.
+        </p>
+        <p>
+          A desktop browser is also where you will find <strong>local-folder access</strong>,
+          the File System Access capability Research Garden needs to open your Markdown directly.
+          Mobile browsers do not offer it.
+        </p>
       </div>
     </main>
   )

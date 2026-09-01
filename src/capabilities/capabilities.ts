@@ -9,6 +9,9 @@
  * behaviour can be verified without a real browser.
  */
 
+export const MINIMUM_WORKSPACE_WIDTH = 1024
+export const MINIMUM_WORKSPACE_HEIGHT = 640
+
 export interface CapabilityEnvironment {
   /** Present on browsers implementing the File System Access directory picker. */
   readonly showDirectoryPicker?: unknown
@@ -26,6 +29,11 @@ export interface Capabilities {
    * `online`/`offline` events rather than only once at load.
    */
   readonly online: boolean
+}
+
+export interface Viewport {
+  readonly width: number
+  readonly height: number
 }
 
 /**
@@ -48,6 +56,7 @@ export type AgentInterfaceStatus = 'available' | 'unsupported' | 'offline'
 
 export type Readiness =
   | { readonly kind: 'ready'; readonly agentInterface: AgentInterfaceStatus }
+  | { readonly kind: 'unsupported-viewport' }
   | { readonly kind: 'unsupported-browser'; readonly missing: MissingCapability }
 
 /**
@@ -99,6 +108,12 @@ export function detectCapabilities(environment: CapabilityEnvironment): Capabili
  * unsupported environment from partially executing an action: there is one
  * place where "may we proceed" is answered.
  */
-export function resolveReadiness(capabilities: Capabilities): Readiness {
+export function resolveReadiness(capabilities: Capabilities, viewport: Viewport): Readiness {
+  if (viewport.width < MINIMUM_WORKSPACE_WIDTH || viewport.height < MINIMUM_WORKSPACE_HEIGHT) {
+    return { kind: 'unsupported-viewport' }
+  }
+  if (!capabilities.localFolderAccess) {
+    return { kind: 'unsupported-browser', missing: 'local-folder-access' }
+  }
   return { kind: 'ready', agentInterface: resolveAgentInterfaceStatus(capabilities) }
 }

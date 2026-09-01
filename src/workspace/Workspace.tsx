@@ -50,7 +50,6 @@ import { SearchBox } from './SearchBox'
 import {
   canopyForItem,
   containingBranchId,
-  usesExploreProjection,
   type ExploreScope,
 } from './exploreTree'
 import { revealItem, UNFOCUSED, type TreeViewState } from './treeView'
@@ -92,6 +91,8 @@ import { revealItem, UNFOCUSED, type TreeViewState } from './treeView'
  */
 export interface WorkspaceProps {
   readonly garden: OpenedGarden
+  /** Living explorer is opt-in; legacy Tree remains the default contract. */
+  readonly explorerMode?: 'legacy' | 'living'
   readonly sourceMode?: 'live' | 'imported'
   readonly onDiscardImported?: () => void
   /**
@@ -116,6 +117,7 @@ const focusableSelector = [
 
 export function Workspace({
   garden: initialGarden,
+  explorerMode = 'legacy',
   sourceMode = 'live',
   onDiscardImported,
   agentInterface = 'available',
@@ -186,7 +188,7 @@ export function Workspace({
   // ADR 0061 / ticket 24: a warning, never a limit -- everything below still
   // opens and works regardless of what this says.
   const performanceWarning = exceedsPerformanceTarget(garden.index)
-  const explorerEnabled = usesExploreProjection(garden.index)
+  const explorerEnabled = explorerMode === 'living'
 
   /** Items that loaded but carry a Garden Diagnostic, so the Tree can mark them. */
   const diagnosedIds = useMemo(
