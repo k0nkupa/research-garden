@@ -101,6 +101,16 @@ export function assertPathWithinRepository(path: GardenPath): void {
   }
 }
 
+/**
+ * A stable collision key for paths that may later be opened on a normalizing
+ * or case-insensitive filesystem. It deliberately follows validation so it
+ * can never turn an escape sequence into an apparently safe name.
+ */
+export function normalizedGardenPathKey(path: GardenPath): string {
+  assertPathWithinRepository(path)
+  return path.map((segment) => segment.normalize('NFC').toLocaleLowerCase('en-US')).join('\u0000')
+}
+
 /** One wording for the one recoverable filesystem state. */
 export const PERMISSION_LAPSED_MESSAGE =
   'Research Garden no longer has permission for this folder.'

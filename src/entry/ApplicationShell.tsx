@@ -1,17 +1,12 @@
-import type { ReactNode } from 'react'
-import {
-  MINIMUM_WORKSPACE_HEIGHT,
-  MINIMUM_WORKSPACE_WIDTH,
-  type AgentInterfaceStatus,
-  type MissingCapability,
-  type Readiness,
-} from '../capabilities/capabilities'
+import { useRef, type ChangeEvent, type ReactNode } from 'react'
+import { type AgentInterfaceStatus, type MissingCapability, type Readiness } from '../capabilities/capabilities'
 import { BareTrunk } from './BareTrunk'
 
 export interface ApplicationShellProps {
   readonly readiness: Readiness
   readonly onCreateGarden?: () => void
   readonly onOpenGarden?: () => void
+  readonly onImportGarden?: (files: FileList) => void
   /** A folder is being scanned; the actions must not be invoked twice. */
   readonly busy?: boolean
   /** A Garden could not be opened, in the person's terms. */
@@ -34,16 +29,18 @@ export function ApplicationShell({
   readiness,
   onCreateGarden,
   onOpenGarden,
+  onImportGarden,
   busy = false,
   failure,
   remembered,
   onResume,
   onForget,
 }: ApplicationShellProps) {
-  if (readiness.kind === 'unsupported-viewport') {
-    return <UnsupportedViewport />
+  const importInput = useRef<HTMLInputElement>(null)
+  const onImport = (event: ChangeEvent<HTMLInputElement>) => {
+    if (event.target.files) onImportGarden?.(event.target.files)
+    event.target.value = ''
   }
-
   if (readiness.kind === 'unsupported-browser') {
     return <UnsupportedBrowser missing={readiness.missing} />
   }
@@ -71,9 +68,25 @@ export function ApplicationShell({
             >
               Create Garden
             </button>
-            <button type="button" className="action" onClick={onOpenGarden} disabled={busy}>
+            <button type="button" className="action" onClick={() => {
+              const canChooseFolder = typeof (window as { showDirectoryPicker?: unknown }).showDirectoryPicker === 'function'
+              if (canChooseFolder || !onImportGarden) onOpenGarden?.()
+              else importInput.current?.click()
+            }} disabled={busy}>
               {busy ? 'Opening…' : 'Open Garden'}
             </button>
+            <button type="button" className="action" onClick={() => importInput.current?.click()} disabled={busy}>
+              Import Garden
+            </button>
+            <input
+              ref={importInput}
+              className="import-garden-input"
+              type="file"
+              multiple
+              // @ts-expect-error The directory-selection attribute is a browser capability extension.
+              webkitdirectory=""
+              onChange={onImport}
+            />
           </div>
         </div>
 
@@ -158,37 +171,6 @@ function UnsupportedBrowser({ missing }: { readonly missing: MissingCapability }
           back to &mdash; that is the point of the product.
         </p>
         <p>A current desktop Chromium browser &mdash; Chrome or Edge &mdash; provides it.</p>
-      </div>
-    </main>
-  )
-}
-
-/**
- * The desktop requirement is resolved before any capability check (ADR 0040),
- * so this explanation also names local-folder access: a small screen very often
- * lacks it too, and that person should still learn which capability a desktop
- * browser is needed for rather than only that their screen is small.
- */
-function UnsupportedViewport() {
-  return (
-    <main className="shell shell--explanation">
-      <div className="explanation">
-        <h1>Research Garden needs a desktop browser</h1>
-        <p>
-          The Garden workspace puts a navigable Tree, a selected item, and the Change Tray
-          side by side, and it needs room to do that. This screen is smaller than the{' '}
-          {MINIMUM_WORKSPACE_WIDTH}&times;{MINIMUM_WORKSPACE_HEIGHT} the workspace is
-          designed for.
-        </p>
-        <p>
-          A desktop browser is also where you will find <strong>local-folder access</strong>,
-          the File System Access capability Research Garden needs to open your Markdown
-          directly. Mobile browsers do not offer it.
-        </p>
-        <p>
-          Rather than offer folder access, Tree navigation, and editing in a form that would
-          not work, we would rather say plainly: open this on a desktop.
-        </p>
       </div>
     </main>
   )

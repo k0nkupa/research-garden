@@ -3,16 +3,11 @@
  *
  * ADR 0059 requires local-folder access and WebMCP to be feature-detected
  * independently: with local-folder access the complete human interface stays
- * usable even when WebMCP is absent, and agent workflows require both. ADR 0040
- * scopes the workspace to desktop.
+ * usable even when WebMCP is absent, and agent workflows require both.
  *
  * Detection is a pure function over an injected environment so the shell's
  * behaviour can be verified without a real browser.
  */
-
-/** The smallest viewport the Garden workspace is designed for (ADR 0040). */
-export const MINIMUM_WORKSPACE_WIDTH = 1024
-export const MINIMUM_WORKSPACE_HEIGHT = 640
 
 export interface CapabilityEnvironment {
   /** Present on browsers implementing the File System Access directory picker. */
@@ -31,11 +26,6 @@ export interface Capabilities {
    * `online`/`offline` events rather than only once at load.
    */
   readonly online: boolean
-}
-
-export interface Viewport {
-  readonly width: number
-  readonly height: number
 }
 
 /**
@@ -58,7 +48,6 @@ export type AgentInterfaceStatus = 'available' | 'unsupported' | 'offline'
 
 export type Readiness =
   | { readonly kind: 'ready'; readonly agentInterface: AgentInterfaceStatus }
-  | { readonly kind: 'unsupported-viewport' }
   | { readonly kind: 'unsupported-browser'; readonly missing: MissingCapability }
 
 /**
@@ -110,17 +99,6 @@ export function detectCapabilities(environment: CapabilityEnvironment): Capabili
  * unsupported environment from partially executing an action: there is one
  * place where "may we proceed" is answered.
  */
-export function resolveReadiness(capabilities: Capabilities, viewport: Viewport): Readiness {
-  // The desktop requirement is the outermost gate (ADR 0040). A small screen is
-  // told about the screen, because no capability explanation would be
-  // actionable there.
-  if (viewport.width < MINIMUM_WORKSPACE_WIDTH || viewport.height < MINIMUM_WORKSPACE_HEIGHT) {
-    return { kind: 'unsupported-viewport' }
-  }
-
-  if (!capabilities.localFolderAccess) {
-    return { kind: 'unsupported-browser', missing: 'local-folder-access' }
-  }
-
+export function resolveReadiness(capabilities: Capabilities): Readiness {
   return { kind: 'ready', agentInterface: resolveAgentInterfaceStatus(capabilities) }
 }

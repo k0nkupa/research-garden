@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from 'react'
 import type { AgentInterfaceStatus } from '../capabilities/capabilities'
 import { approveChange, type ApproveChangeResult } from '../garden/approveChange'
 import { editItem, type EditItemResult } from '../garden/editItem'
@@ -31,6 +31,8 @@ import {
 import { nowAsCanonicalTimestamp } from '../domain/schema/canonicalTimestamp'
 import { browserEntropy, createUlidFactory, type UlidEntropy } from '../domain/schema/ulid'
 import type { GardenFileSystem } from '../filesystem/GardenFileSystem'
+import { ImportedGardenFileSystem } from '../filesystem/ImportedGardenFileSystem'
+import { exportImportedGardenZip } from '../filesystem/exportImportedGarden'
 import { createGardenToolBundles } from '../webmcp/gardenToolBundles'
 import {
   createStateAwareToolRegistration,
@@ -41,9 +43,16 @@ import { ChangeDiffPanel } from './ChangeDiffPanel'
 import { ChangeTray } from './ChangeTray'
 import { DiagnosticsPanel } from './DiagnosticsPanel'
 import { GardenActivityFeed } from './GardenActivityFeed'
+import { ExploreNavigator, GardenExplorer } from './GardenExplorer'
 import { GardenTree } from './GardenTree'
 import { ItemPanel } from './ItemPanel'
 import { SearchBox } from './SearchBox'
+import {
+  canopyForItem,
+  containingBranchId,
+  usesExploreProjection,
+  type ExploreScope,
+} from './exploreTree'
 import { revealItem, UNFOCUSED, type TreeViewState } from './treeView'
 
 /**
@@ -83,6 +92,8 @@ import { revealItem, UNFOCUSED, type TreeViewState } from './treeView'
  */
 export interface WorkspaceProps {
   readonly garden: OpenedGarden
+  readonly sourceMode?: 'live' | 'imported'
+  readonly onDiscardImported?: () => void
   /**
    * Whether ChatGPT can currently reach this browser through WebMCP (ADR
    * 0059/0072) -- distinct from `agentAccess`, which is the person's own
@@ -98,8 +109,15 @@ export interface WorkspaceProps {
 
 type PanelMode = 'item' | 'diagnostics' | 'activity' | 'change' | 'connect'
 
+const focusableSelector = [
+  'button:not([disabled])', '[href]', 'input:not([disabled])',
+  'select:not([disabled])', 'textarea:not([disabled])', '[tabindex]:not([tabindex="-1"])',
+].join(', ')
+
 export function Workspace({
   garden: initialGarden,
+  sourceMode = 'live',
+  onDiscardImported,
   agentInterface = 'available',
   now,
   entropy,
@@ -107,8 +125,17 @@ export function Workspace({
   const [garden, setGarden] = useState<OpenedGarden>(initialGarden)
   const [selectedId, setSelectedId] = useState<string | undefined>(undefined)
   const [panelMode, setPanelMode] = useState<PanelMode>('item')
+  const [narrowLayout, setNarrowLayout] = useState(() =>
+    typeof window !== 'undefined' && typeof window.matchMedia === 'function' && window.matchMedia('(max-width: 767px)').matches,
+  )
+  const [treeDrawerOpen, setTreeDrawerOpen] = useState(false)
+  const treeToggleRef = useRef<HTMLButtonElement>(null)
+  const treeDrawerRef = useRef<HTMLDivElement>(null)
+  const sheetRef = useRef<HTMLDivElement>(null)
+  const panelTriggerRef = useRef<HTMLElement | null>(null)
   // View state only: what the Tree is showing, never what the Garden holds.
   const [view, setView] = useState<TreeViewState>(UNFOCUSED)
+  const [exploreScope, setExploreScope] = useState<ExploreScope>({ kind: 'overview' })
   const [activity, setActivity] = useState<readonly GardenActivityEntry[]>([])
   /** The most recent successful edit, while its Undo Snapshot still applies. */
   const [lastEdit, setLastEdit] = useState<{ itemId: string; snapshotId: string } | undefined>(
@@ -154,10 +181,12 @@ export function Workspace({
   const diagnostics = garden.index.diagnostics
   const undoableSelected = lastEdit !== undefined && selectedId === lastEdit.itemId
   const selectedChange = pendingChanges.find((change) => change.id === selectedChangeId)
+  const narrowSheetOpen = narrowLayout && panelMode !== 'item'
   const titleForItem = (itemId: string) => garden.index.items.get(itemId)?.item.title
   // ADR 0061 / ticket 24: a warning, never a limit -- everything below still
   // opens and works regardless of what this says.
   const performanceWarning = exceedsPerformanceTarget(garden.index)
+  const explorerEnabled = usesExploreProjection(garden.index)
 
   /** Items that loaded but carry a Garden Diagnostic, so the Tree can mark them. */
   const diagnosedIds = useMemo(
@@ -173,12 +202,140 @@ export function Workspace({
   const selectItem = (id: string) => {
     setSelectedId(id)
     setPanelMode('item')
+    if (narrowLayout && treeDrawerOpen) closeTreeDrawer()
+    else setTreeDrawerOpen(false)
     // ticket 11: a result chosen from search (or a Diagnostic) may name an
     // item the Tree currently has folded away or focused past. Without this,
     // selecting it would update the panel while the Tree kept showing
     // something else -- selection would not actually reach the Tree.
+    if (!explorerEnabled) {
+      setView((current) => revealItem(garden.index, current, id))
+      return
+    }
+
+    const branchId = containingBranchId(garden.index, id)
+    if (branchId !== undefined) {
+      const canopy = canopyForItem(garden.index, branchId, id)
+      setExploreScope(canopy
+        ? { kind: 'canopy', branchId, canopyId: canopy.id }
+        : { kind: 'branch', id: branchId })
+      setView((current) => ({ ...revealItem(garden.index, current, id), focusedId: branchId }))
+      return
+    }
+
+    setExploreScope({ kind: 'overview' })
     setView((current) => revealItem(garden.index, current, id))
   }
+
+  const openScope = (scope: ExploreScope) => {
+    setExploreScope(scope)
+    if (narrowLayout && treeDrawerOpen) closeTreeDrawer()
+    else setTreeDrawerOpen(false)
+    if (scope.kind === 'branch' || scope.kind === 'canopy') {
+      const branchId = scope.kind === 'branch' ? scope.id : scope.branchId
+      if (scope.kind === 'branch') setSelectedId(branchId)
+      setPanelMode('item')
+      setView((current) => ({ ...current, focusedId: branchId }))
+    } else {
+      setView((current) => ({ ...current, focusedId: undefined }))
+    }
+  }
+
+  const returnToOverview = () => {
+    if (exploreScope.kind === 'canopy') {
+      setExploreScope({ kind: 'branch', id: exploreScope.branchId })
+      setView((current) => ({ ...current, focusedId: exploreScope.branchId }))
+      return
+    }
+    setExploreScope({ kind: 'overview' })
+    setView((current) => ({ ...current, focusedId: undefined }))
+  }
+
+  const moveWithinScope = (id: string) => selectItem(id)
+
+  // A rescan can remove or repair the Branch currently in view. Never let a
+  // stale scope fall back to the unbounded top-level canvas.
+  useEffect(() => {
+    if (!explorerEnabled) return
+    const activeBranchId = exploreScope.kind === 'canopy'
+      ? exploreScope.branchId
+      : exploreScope.kind === 'branch'
+        ? exploreScope.id
+        : undefined
+    if (activeBranchId && garden.index.items.get(activeBranchId)?.item.kind !== 'branch') {
+      setExploreScope({ kind: 'overview' })
+      setView((current) => ({ ...current, focusedId: undefined }))
+    }
+  }, [exploreScope, explorerEnabled, garden.index])
+
+  const restoreFocus = useCallback((target: HTMLElement | null, fallback?: HTMLElement | null) => {
+    window.queueMicrotask(() => (target?.isConnected ? target : fallback)?.focus())
+  }, [])
+
+  const closeTreeDrawer = useCallback(() => {
+    setTreeDrawerOpen(false)
+    restoreFocus(treeToggleRef.current)
+  }, [restoreFocus])
+
+  const closeSheet = useCallback(() => {
+    setPanelMode('item')
+    restoreFocus(panelTriggerRef.current, treeToggleRef.current)
+  }, [restoreFocus])
+
+  const trapModalFocus = (event: ReactKeyboardEvent<HTMLDivElement>) => {
+    if (event.key !== 'Tab') return
+    const focusable = Array.from(event.currentTarget.querySelectorAll<HTMLElement>(focusableSelector))
+    const first = focusable.at(0)
+    const last = focusable.at(-1)
+    if (!first || !last) return
+    if (event.shiftKey && document.activeElement === first) {
+      event.preventDefault()
+      last.focus()
+    } else if (!event.shiftKey && document.activeElement === last) {
+      event.preventDefault()
+      first.focus()
+    }
+  }
+
+  const exportImportedGarden = async () => {
+    if (!(garden.fileSystem instanceof ImportedGardenFileSystem)) return
+    const zip = exportImportedGardenZip(garden.fileSystem.snapshot())
+    const link = document.createElement('a')
+    link.href = URL.createObjectURL(new Blob([zip.buffer as ArrayBuffer], { type: 'application/zip' }))
+    link.download = `${garden.repositoryName}.zip`
+    document.body.append(link)
+    link.click()
+    window.setTimeout(() => { URL.revokeObjectURL(link.href); link.remove() }, 0)
+    await garden.fileSystem.markExported()
+  }
+
+  useEffect(() => {
+    if (typeof window.matchMedia !== 'function') return
+    const media = window.matchMedia('(max-width: 767px)')
+    const update = () => {
+      setNarrowLayout(media.matches)
+      if (!media.matches) setTreeDrawerOpen(false)
+    }
+    update()
+    media.addEventListener('change', update)
+    return () => media.removeEventListener('change', update)
+  }, [])
+
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return
+      if (treeDrawerOpen) closeTreeDrawer()
+      else if (narrowLayout && panelMode !== 'item') closeSheet()
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [closeSheet, closeTreeDrawer, narrowLayout, panelMode, treeDrawerOpen])
+
+  useEffect(() => {
+    if (!narrowLayout) return
+    if (treeDrawerOpen) treeDrawerRef.current?.querySelector<HTMLElement>('.workspace__drawer-close')?.focus()
+    else if (panelMode !== 'item') sheetRef.current?.querySelector<HTMLElement>('.workspace__sheet-close')?.focus()
+  }, [narrowLayout, panelMode, treeDrawerOpen])
 
   /**
    * Rescans the Garden Repository (ADR 0053, ticket 13): reopens it and swaps
@@ -371,7 +528,8 @@ export function Workspace({
     return result
   }, [clock, entropy, garden.fileSystem, lastEdit, nextActivityId, now, rescanGarden])
 
-  const selectChange = (id: string) => {
+  const selectChange = (id: string, trigger?: HTMLElement) => {
+    if (trigger) panelTriggerRef.current = trigger
     setSelectedChangeId(id)
     setPanelMode('change')
   }
@@ -401,7 +559,8 @@ export function Workspace({
         setLastEdit({ itemId: change.itemId, snapshotId: result.snapshotId })
         setSelectedChangeId(undefined)
         setSelectedId(change.itemId)
-        setPanelMode('item')
+        if (narrowLayout) closeSheet()
+        else setPanelMode('item')
         await rescanGarden()
       } else {
         // A refusal (Stale, invalid) may itself reflect something that just
@@ -411,7 +570,7 @@ export function Workspace({
 
       return result
     },
-    [clock, entropy, garden.fileSystem, nextActivityId, now, refreshPendingChanges, rescanGarden],
+    [clock, closeSheet, entropy, garden.fileSystem, narrowLayout, nextActivityId, now, refreshPendingChanges, rescanGarden],
   )
 
   const rejectSelectedChange = useCallback(
@@ -427,14 +586,15 @@ export function Workspace({
         const wasSelected = selectedChangeId === change.id
         if (wasSelected) {
           setSelectedChangeId(undefined)
-          setPanelMode('item')
+          if (narrowLayout) closeSheet()
+          else setPanelMode('item')
         }
         await refreshPendingChanges(garden.fileSystem)
       }
 
       return result
     },
-    [clock, garden.fileSystem, nextActivityId, refreshPendingChanges, selectedChangeId],
+    [clock, closeSheet, garden.fileSystem, narrowLayout, nextActivityId, refreshPendingChanges, selectedChangeId],
   )
 
   /** Opens the disclosure, fresh -- not a stale Disconnected notice from earlier this session. */
@@ -475,8 +635,25 @@ export function Workspace({
 
   return (
     <main className="workspace">
-      <div className="workspace__bar">
+      <div className="workspace__bar" inert={narrowSheetOpen} aria-hidden={narrowSheetOpen || undefined}>
         <span className="workspace__repository">{garden.repositoryName}</span>
+        {sourceMode === 'imported' && <span className="workspace__source-mode">Imported Garden — export changes explicitly</span>}
+        {sourceMode === 'imported' && <button type="button" className="workspace__panel-toggle" onClick={() => void exportImportedGarden()}>Export Garden Changes</button>}
+        {sourceMode === 'imported' && <button type="button" className="workspace__panel-toggle" onClick={onDiscardImported}>Discard Imported Copy</button>}
+
+        <button
+          type="button"
+          ref={treeToggleRef}
+          className="workspace__tree-toggle"
+          aria-expanded={treeDrawerOpen}
+          aria-controls="garden-tree-drawer"
+          onClick={() => setTreeDrawerOpen((open) => {
+            if (open) restoreFocus(treeToggleRef.current)
+            return !open
+          })}
+        >
+          Tree
+        </button>
 
         <SearchBox index={garden.index} onSelect={selectItem} />
 
@@ -484,10 +661,10 @@ export function Workspace({
           <button
             type="button"
             className="workspace__focus"
-            onClick={() => setView({ ...view, focusedId: undefined })}
+            onClick={explorerEnabled ? returnToOverview : () => setView({ ...view, focusedId: undefined })}
           >
             Focused on {garden.index.items.get(view.focusedId)?.item.title ?? 'a Branch'} — show
-            the whole Tree
+            {explorerEnabled ? ' the overview' : ' the whole Tree'}
           </button>
         )}
 
@@ -495,7 +672,10 @@ export function Workspace({
           type="button"
           className="workspace__panel-toggle"
           aria-pressed={panelMode === 'activity'}
-          onClick={() => setPanelMode((mode) => (mode === 'activity' ? 'item' : 'activity'))}
+          onClick={(event) => {
+            panelTriggerRef.current = event.currentTarget
+            setPanelMode((mode) => (mode === 'activity' ? 'item' : 'activity'))
+          }}
         >
           {activity.length > 0 ? `Activity (${activity.length})` : 'Activity'}
         </button>
@@ -505,7 +685,10 @@ export function Workspace({
             type="button"
             className="workspace__panel-toggle"
             aria-pressed={panelMode === 'diagnostics'}
-            onClick={() => setPanelMode((mode) => (mode === 'diagnostics' ? 'item' : 'diagnostics'))}
+            onClick={(event) => {
+              panelTriggerRef.current = event.currentTarget
+              setPanelMode((mode) => (mode === 'diagnostics' ? 'item' : 'diagnostics'))
+            }}
           >
             {diagnostics.length} {diagnostics.length === 1 ? 'Diagnostic' : 'Diagnostics'}
           </button>
@@ -516,7 +699,8 @@ export function Workspace({
             type="button"
             className="workspace__panel-toggle"
             aria-pressed={panelMode === 'change'}
-            onClick={() => {
+            onClick={(event) => {
+              panelTriggerRef.current = event.currentTarget
               if (panelMode === 'change') {
                 setPanelMode('item')
                 return
@@ -540,7 +724,10 @@ export function Workspace({
                 ? 'No connection right now — Agent Access needs the host connection to work.'
                 : undefined
             }
-            onClick={() => (agentAccess ? disconnectAgent() : openAgentAccessPanel())}
+            onClick={(event) => {
+              panelTriggerRef.current = event.currentTarget
+              agentAccess ? disconnectAgent() : openAgentAccessPanel()
+            }}
           >
             {agentAccess ? 'Disconnect ChatGPT' : 'Connect ChatGPT'}
           </button>
@@ -573,16 +760,90 @@ export function Workspace({
       )}
 
       <div className="workspace__panes">
-        <div className="workspace__tree">
-          <GardenTree
-            index={garden.index}
-            selectedId={selectedId}
-            diagnosedIds={diagnosedIds}
-            onSelect={selectItem}
-            view={view}
-            onViewChange={setView}
+        {narrowLayout && treeDrawerOpen && (
+          <button
+            type="button"
+            className="workspace__drawer-backdrop"
+            aria-label="Close Garden Tree"
+            onClick={closeTreeDrawer}
           />
-        </div>
+        )}
+
+        {(!narrowLayout || treeDrawerOpen) && <div
+          id="garden-tree-drawer"
+          className={`workspace__tree${narrowLayout ? ' workspace__tree--drawer' : ''}${treeDrawerOpen ? ' workspace__tree--open' : ''}`}
+          role={narrowLayout ? 'dialog' : undefined}
+          aria-modal={narrowLayout ? true : undefined}
+          aria-label={narrowLayout ? 'Garden Tree' : undefined}
+          ref={treeDrawerRef}
+          inert={narrowSheetOpen}
+          aria-hidden={narrowSheetOpen || undefined}
+          onKeyDown={narrowLayout ? trapModalFocus : undefined}
+        >
+          {narrowLayout && (
+            <button
+              type="button"
+              className="workspace__drawer-close"
+              onClick={closeTreeDrawer}
+            >
+              Close Tree
+            </button>
+          )}
+          {explorerEnabled ? (
+            <div className="workspace__explorer">
+              <ExploreNavigator
+                index={garden.index}
+                scope={exploreScope}
+                view={view}
+                selectedId={selectedId}
+                onBack={returnToOverview}
+                onMove={moveWithinScope}
+              />
+              <GardenExplorer
+                index={garden.index}
+                selectedId={selectedId}
+                diagnosedIds={diagnosedIds}
+                scope={exploreScope}
+                view={view}
+                onSelect={selectItem}
+                onViewChange={setView}
+                onOpenScope={openScope}
+              />
+            </div>
+          ) : (
+            <GardenTree
+              index={garden.index}
+              selectedId={selectedId}
+              diagnosedIds={diagnosedIds}
+              onSelect={selectItem}
+              view={view}
+              onViewChange={setView}
+            />
+          )}
+        </div>}
+
+        {narrowSheetOpen && (
+          <button
+            type="button"
+            className="workspace__sheet-backdrop"
+            aria-label="Close panel"
+            onClick={closeSheet}
+          />
+        )}
+
+        <div
+          ref={sheetRef}
+          className={`workspace__panel${narrowSheetOpen ? ' workspace__panel--sheet' : ''}`}
+          role={narrowSheetOpen ? 'dialog' : undefined}
+          aria-modal={narrowSheetOpen ? true : undefined}
+          aria-label={narrowSheetOpen ? `${panelMode} panel` : undefined}
+          onKeyDown={narrowSheetOpen ? trapModalFocus : undefined}
+        >
+        {narrowLayout && panelMode !== 'item' && (
+          <button type="button" className="workspace__sheet-close" onClick={closeSheet}>
+            Close
+          </button>
+        )}
 
         {panelMode === 'diagnostics' && (
           <DiagnosticsPanel
@@ -595,13 +856,16 @@ export function Workspace({
         {panelMode === 'activity' && <GardenActivityFeed entries={activity} titleFor={titleForItem} />}
 
         {panelMode === 'change' && (
-          <ChangeDiffPanel
-            change={selectedChange}
-            isStale={selectedChange !== undefined && staleChangeIds.has(selectedChange.id)}
-            titleFor={titleForItem}
-            onApprove={approveSelectedChange}
-            onReject={rejectSelectedChange}
-          />
+          <>
+            <ChangeDiffPanel
+              change={selectedChange}
+              isStale={selectedChange !== undefined && staleChangeIds.has(selectedChange.id)}
+              titleFor={titleForItem}
+              onApprove={approveSelectedChange}
+              onReject={rejectSelectedChange}
+            />
+            {narrowLayout && <ChangeTray changes={pendingChanges} staleIds={staleChangeIds} selectedId={selectedChangeId} onSelect={selectChange} titleFor={titleForItem} />}
+          </>
         )}
 
         {panelMode === 'connect' && (
@@ -622,15 +886,20 @@ export function Workspace({
             onUndo={undoableSelected ? undoLastEdit : undefined}
           />
         )}
+        </div>
       </div>
 
-      <ChangeTray
-        changes={pendingChanges}
-        staleIds={staleChangeIds}
-        selectedId={panelMode === 'change' ? selectedChangeId : undefined}
-        onSelect={selectChange}
-        titleFor={titleForItem}
-      />
+      {!(narrowLayout && panelMode === 'change') && (
+        <div inert={narrowSheetOpen} aria-hidden={narrowSheetOpen || undefined}>
+          <ChangeTray
+            changes={pendingChanges}
+            staleIds={staleChangeIds}
+            selectedId={panelMode === 'change' ? selectedChangeId : undefined}
+            onSelect={selectChange}
+            titleFor={titleForItem}
+          />
+        </div>
+      )}
     </main>
   )
 }

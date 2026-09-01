@@ -1,4 +1,5 @@
 import type { PendingChangeRecord } from '../garden/pendingChange'
+import { parseGardenDocument } from '../domain/document/gardenDocument'
 
 /**
  * The Change Tray (ADR 0047, ticket 14): a thin status rail when there is
@@ -11,8 +12,17 @@ export interface ChangeTrayProps {
   readonly changes: readonly PendingChangeRecord[]
   readonly staleIds: ReadonlySet<string>
   readonly selectedId: string | undefined
-  readonly onSelect: (id: string) => void
+  readonly onSelect: (id: string, trigger?: HTMLElement) => void
   readonly titleFor: (itemId: string) => string | undefined
+}
+
+function titleFromProposedText(text: string): string | undefined {
+  // A Harvest targets a file that does not exist yet, so it cannot be in the
+  // current index. Its review label still belongs to the proposed item's
+  // frontmatter rather than the generated harvest id.
+  const parsed = parseGardenDocument(text)
+  const title = parsed.ok ? parsed.document.frontmatter['title'] : undefined
+  return typeof title === 'string' && title.trim() ? title : undefined
 }
 
 export function ChangeTray({ changes, staleIds, selectedId, onSelect, titleFor }: ChangeTrayProps) {
@@ -32,7 +42,7 @@ export function ChangeTray({ changes, staleIds, selectedId, onSelect, titleFor }
 
       <ul className="change-tray__list">
         {changes.map((change) => {
-          const title = titleFor(change.itemId) ?? change.itemId
+          const title = titleFor(change.itemId) ?? titleFromProposedText(change.previewText) ?? change.itemId
           const stale = staleIds.has(change.id)
 
           return (
@@ -41,7 +51,7 @@ export function ChangeTray({ changes, staleIds, selectedId, onSelect, titleFor }
                 type="button"
                 className="change-tray__entry"
                 aria-pressed={selectedId === change.id}
-                onClick={() => onSelect(change.id)}
+                onClick={(event) => onSelect(change.id, event.currentTarget)}
               >
                 {title}
                 {stale && <span className="change-tray__stale-badge">Stale</span>}

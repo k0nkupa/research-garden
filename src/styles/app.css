@@ -265,6 +265,16 @@ body {
   color: color-mix(in srgb, var(--bark) 75%, transparent);
 }
 
+.workspace__source-mode { font-family: var(--metadata); font-size: 0.7rem; color: var(--canopy); }
+.import-garden-input { display: none; }
+
+.workspace__tree-toggle,
+.workspace__drawer-close,
+.workspace__sheet-close,
+.workspace__drawer-backdrop {
+  display: none;
+}
+
 /*
  * Search (ticket 11). Functional styling only -- ticket 10 owns the full
  * visual system; this only needs to be usable and keep the dropdown from
@@ -370,11 +380,361 @@ body {
   min-height: 0;
 }
 
+.workspace__panel {
+  min-width: 0;
+  overflow: auto;
+}
+
 .workspace__tree {
   min-width: 0;
   padding: 1.5rem;
   display: flex;
   overflow: auto;
+}
+
+.garden-explorer-nav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  flex: 0 0 auto;
+  padding: 0.15rem 0 1rem;
+  color: color-mix(in srgb, var(--bark) 72%, transparent);
+  font-family: var(--metadata);
+  font-size: 0.72rem;
+}
+
+.garden-explorer-nav__crumbs,
+.garden-explorer-nav__controls {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+}
+
+.garden-explorer-nav__back,
+.garden-explorer-nav__controls button {
+  border: 1px solid color-mix(in srgb, var(--canopy) 45%, transparent);
+  border-radius: 999px;
+  padding: 0.35rem 0.65rem;
+  background: var(--canvas);
+  color: var(--canopy);
+  font: inherit;
+  cursor: pointer;
+}
+
+.garden-explorer-nav__controls button:disabled {
+  cursor: default;
+  opacity: 0.4;
+}
+
+.garden-explorer-nav__back:focus-visible,
+.garden-explorer-nav__controls button:focus-visible,
+.garden-overview__card:focus-visible,
+.garden-collection__item:focus-visible {
+  outline: 2px solid var(--pollen);
+  outline-offset: 3px;
+}
+
+.garden-explorer-nav__status {
+  color: color-mix(in srgb, var(--bark) 62%, transparent);
+}
+
+.workspace__explorer-stage {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  animation: garden-scope-enter 220ms cubic-bezier(0.23, 1, 0.32, 1);
+}
+
+.workspace__explorer {
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+  flex: 1;
+  flex-direction: column;
+}
+
+@keyframes garden-scope-enter {
+  from { opacity: 0; transform: translateY(0.35rem) scale(0.99); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+.garden-overview,
+.garden-collection {
+  max-width: 58rem;
+  margin: 0 auto;
+  padding: clamp(1rem, 4vw, 3rem) clamp(0.25rem, 3vw, 2rem);
+}
+
+.garden-overview__intro,
+.garden-collection__intro {
+  max-width: 44rem;
+  margin-bottom: 1.5rem;
+}
+
+.garden-overview__eyebrow {
+  margin: 0 0 0.4rem;
+  color: var(--canopy);
+  font-family: var(--metadata);
+  font-size: 0.72rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.garden-overview h2,
+.garden-collection h2 {
+  margin: 0 0 0.55rem;
+  font-size: clamp(1.35rem, 3vw, 2rem);
+  font-weight: 600;
+}
+
+.garden-overview__intro p:last-child,
+.garden-collection__intro p:last-child {
+  margin: 0;
+  color: color-mix(in srgb, var(--bark) 72%, transparent);
+  line-height: 1.55;
+}
+
+.garden-overview__cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(13rem, 100%), 1fr));
+  gap: 0.75rem;
+}
+
+.garden-overview__card {
+  display: flex;
+  min-height: 9rem;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.35rem;
+  padding: 1rem;
+  border: 1px solid color-mix(in srgb, var(--lichen) 72%, transparent);
+  border-radius: 0.7rem;
+  background: color-mix(in srgb, var(--canvas) 85%, white);
+  color: var(--bark);
+  text-align: left;
+  cursor: pointer;
+  transition: transform 160ms cubic-bezier(0.23, 1, 0.32, 1), border-color 160ms ease-out, box-shadow 160ms ease-out;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .garden-overview__card:hover {
+    transform: translateY(-0.15rem);
+    border-color: var(--canopy);
+    box-shadow: 0 0.5rem 1.2rem color-mix(in srgb, var(--bark) 10%, transparent);
+  }
+}
+
+.garden-overview__kind,
+.garden-collection__item-path {
+  color: var(--canopy);
+  font-family: var(--metadata);
+  font-size: 0.68rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.garden-overview__title {
+  font-size: 1.1rem;
+  font-weight: 600;
+}
+
+.garden-overview__count {
+  color: color-mix(in srgb, var(--bark) 66%, transparent);
+  font-family: var(--control);
+  font-size: 0.85rem;
+}
+
+.garden-overview__action {
+  margin-top: auto;
+  color: var(--canopy);
+  font-family: var(--control);
+  font-size: 0.85rem;
+}
+
+.garden-collection__list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(18rem, 100%), 1fr));
+  gap: 0.5rem;
+  max-height: min(62vh, 42rem);
+  overflow: auto;
+  margin: 0;
+  padding: 0.15rem;
+  list-style: none;
+}
+
+.garden-collection__item {
+  display: flex;
+  width: 100%;
+  min-height: 3.4rem;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 0.25rem;
+  padding: 0.65rem 0.8rem;
+  border: 1px solid color-mix(in srgb, var(--lichen) 58%, transparent);
+  border-radius: 0.45rem;
+  background: color-mix(in srgb, var(--canvas) 88%, white);
+  color: var(--bark);
+  text-align: left;
+  cursor: pointer;
+}
+
+.garden-collection__item:hover,
+.garden-collection__item--selected {
+  border-color: var(--canopy);
+  background: color-mix(in srgb, var(--canopy) 9%, var(--canvas));
+}
+
+.garden-collection__item-title {
+  font-size: 0.95rem;
+  font-weight: 600;
+}
+
+.garden-collection__item-path {
+  overflow: hidden;
+  max-width: 100%;
+  color: color-mix(in srgb, var(--bark) 55%, transparent);
+  letter-spacing: 0;
+  text-overflow: ellipsis;
+  text-transform: none;
+  white-space: nowrap;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .workspace__explorer-stage {
+    animation-name: garden-scope-enter-reduced;
+    transform: none;
+  }
+
+  .garden-overview__card:hover {
+    transform: none;
+  }
+}
+
+@keyframes garden-scope-enter-reduced {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+/*
+ * The living-Garden drill-down: Garden map, research thread, and Canopy all
+ * share the real Tree as their canvas. These surfaces only frame it -- the
+ * intro and the limb rail -- so the botanical drawing stays the subject.
+ */
+.garden-map,
+.living-tree {
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+  flex: 1;
+  flex-direction: column;
+  padding: clamp(0.75rem, 2.5vw, 1.75rem) clamp(0.5rem, 2.5vw, 1.75rem) 0;
+}
+
+.garden-map__intro,
+.living-tree__intro {
+  max-width: 52rem;
+  margin: 0 auto 0.75rem;
+  width: 100%;
+}
+
+.living-tree__intro p:last-child {
+  margin: 0 0 0.85rem;
+  color: color-mix(in srgb, var(--bark) 72%, transparent);
+  line-height: 1.55;
+}
+
+/*
+ * The limb rail: one pill per semantic Canopy the thread carries. It is the
+ * drill-down affordance -- choosing a Canopy bounds the Tree to that kind's
+ * leaves without ever leaving the botanical drawing.
+ */
+.living-tree__canopies {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+}
+
+.living-tree__canopy-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.4rem 0.75rem;
+  border: 1px solid color-mix(in srgb, var(--canopy) 42%, transparent);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--canvas) 92%, white);
+  color: var(--bark);
+  font-family: var(--control);
+  font-size: 0.82rem;
+  cursor: pointer;
+  transition: border-color 140ms ease-out, background 140ms ease-out, transform 140ms cubic-bezier(0.23, 1, 0.32, 1);
+}
+
+.living-tree__canopy-pill:hover {
+  border-color: var(--canopy);
+  background: color-mix(in srgb, var(--canopy) 9%, var(--canvas));
+  transform: translateY(-1px);
+}
+
+.living-tree__canopy-pill:focus-visible {
+  outline: 2px solid var(--pollen);
+  outline-offset: 2px;
+}
+
+.living-tree__canopy-pill-title {
+  font-weight: 600;
+}
+
+.living-tree__canopy-pill-count {
+  color: var(--canopy);
+  font-family: var(--metadata);
+  font-size: 0.7rem;
+}
+
+.living-tree__canopies-more {
+  align-self: center;
+  color: color-mix(in srgb, var(--bark) 55%, transparent);
+  font-family: var(--metadata);
+  font-size: 0.72rem;
+}
+
+.garden-overview__pages {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  margin-top: 0.85rem;
+  color: color-mix(in srgb, var(--bark) 62%, transparent);
+  font-family: var(--metadata);
+  font-size: 0.72rem;
+}
+
+.garden-overview__pages button {
+  border: 1px solid color-mix(in srgb, var(--canopy) 45%, transparent);
+  border-radius: 999px;
+  padding: 0.35rem 0.7rem;
+  background: var(--canvas);
+  color: var(--canopy);
+  font: inherit;
+  cursor: pointer;
+}
+
+.garden-overview__pages button:disabled {
+  cursor: default;
+  opacity: 0.4;
+}
+
+.garden-overview__pages button:focus-visible {
+  outline: 2px solid var(--pollen);
+  outline-offset: 2px;
+}
+
+.living-tree__empty {
+  margin: 2rem auto;
+  color: color-mix(in srgb, var(--bark) 58%, transparent);
+  font-family: var(--control);
 }
 
 /*
@@ -409,14 +769,22 @@ body {
 
 .garden-tree__links path {
   fill: none;
-  stroke: var(--bark);
-  stroke-width: 7;
-  stroke-opacity: 0.9;
   stroke-linecap: round;
   stroke-linejoin: round;
   /* On the base rule, not only `--dimmed`, so a limb fades back in when a
      selection clears exactly as smoothly as it faded out (ADR 0045). */
   transition: opacity 120ms ease-out;
+}
+
+/*
+ * The structural limb. Its width is set inline from the target's depth so the
+ * Tree tapers as it grows (ADR 0043); the value here is the fallback for the
+ * first generation, which the inline style always overrides.
+ */
+.garden-tree__link {
+  stroke: var(--bark);
+  stroke-width: 6.5;
+  stroke-opacity: 0.9;
 }
 
 /* The inner lichen line is a visual detail layer, never a second relationship. */
@@ -434,14 +802,54 @@ body {
 }
 
 /*
+ * A hovered node answers the pointer: its glyph lifts and its title darkens,
+ * so the thing a person is about to select is unmistakable before the click.
+ * The transform lives on the inner body group, never the positioned node
+ * itself, whose `translate` attribute would be overridden by a CSS transform.
+ */
+@media (hover: hover) and (pointer: fine) {
+  .garden-tree__node-body:hover {
+    transform: translateY(-1.5px);
+  }
+
+  .garden-tree__node:hover .garden-tree__glyph {
+    stroke-width: 3.2;
+  }
+
+  .garden-tree__node:hover .garden-tree__label {
+    font-weight: 600;
+  }
+}
+
+/*
  * The botanical form (ADR 0043). Recognizably a tree -- trunk, soil, roots --
  * but drawn quietly enough that the knowledge nodes stay dominant and labels
  * stay immediately scannable. It is scenery, not the subject.
  */
+
+/* The ground lens the trunk rises from: a soft swell under the soil line. */
+.garden-tree__ground {
+  fill: color-mix(in srgb, var(--canopy) 10%, var(--canvas));
+  stroke: none;
+}
+
+/*
+ * The trunk's filled body. The stroke paths give the trunk its grain; this
+ * silhouette gives it its taper, widening through the soil and flaring into
+ * the root crown so the base reads as planted rather than cut off. The fill
+ * stays translucent (fill-opacity, so the ink-floor rule sees a full-strength
+ * bark and reads no muted text here).
+ */
+.garden-tree__trunk-body {
+  fill: var(--bark);
+  fill-opacity: 0.38;
+  stroke: none;
+}
+
 .garden-tree__trunk {
   fill: none;
   stroke: var(--bark);
-  stroke-width: 9;
+  stroke-width: 4;
   stroke-linecap: round;
   stroke-opacity: 0.9;
 }
@@ -484,31 +892,31 @@ body {
 .garden-tree__cross-link {
   fill: none;
   stroke: var(--lichen);
-  stroke-width: 1.5;
+  stroke-width: 2;
   stroke-dasharray: 5 5;
-  stroke-opacity: 0.85;
+  stroke-opacity: 0.95;
   /* On the base rule so illumination fades both in and out (ADR 0045). */
   transition: opacity 120ms ease-out;
 }
 
 .garden-tree__cross-link--contradicts {
   stroke: var(--mulberry);
-  stroke-width: 2;
+  stroke-width: 2.4;
   stroke-dasharray: 6 4;
 }
 
 .garden-tree__cross-link--supports {
-  stroke: color-mix(in srgb, var(--canopy) 70%, var(--canvas));
+  stroke: color-mix(in srgb, var(--canopy) 78%, var(--canvas));
   stroke-dasharray: 3 4;
 }
 
 .garden-tree__cross-link--answers {
-  stroke: color-mix(in srgb, var(--pollen) 80%, var(--bark));
+  stroke: color-mix(in srgb, var(--pollen) 85%, var(--bark));
   stroke-dasharray: 8 4;
 }
 
 .garden-tree__cross-link--derived-from {
-  stroke: color-mix(in srgb, var(--lichen) 90%, var(--bark));
+  stroke: color-mix(in srgb, var(--lichen) 95%, var(--bark));
   stroke-dasharray: 2 5;
 }
 
@@ -526,7 +934,7 @@ body {
  */
 .garden-tree__link--dimmed,
 .garden-tree__cross-link--dimmed {
-  opacity: 0.15;
+  opacity: 0.35;
 }
 
 /*
@@ -608,7 +1016,7 @@ body {
 .garden-tree__label {
   /* ADR 0039 gives titles to Literata, and a node's title is a title. */
   font-family: var(--reading);
-  font-size: 14px;
+  font-size: 15px;
   fill: var(--bark);
   /* A canvas-coloured halo so a label stays readable where a limb passes behind it. */
   paint-order: stroke;
@@ -619,6 +1027,7 @@ body {
 
 .garden-tree__node--selected .garden-tree__label {
   font-weight: 600;
+  fill: var(--canopy);
 }
 
 .garden-tree__node:focus-visible {
@@ -663,9 +1072,14 @@ body {
  * be able to tell them apart at a glance. A dimmed node is still focusable and
  * still fully opaque the moment it receives focus, the same guarantee ticket
  * 08 makes for a Dormant Branch.
+ *
+ * The fade stops short of invisibility: at 0.2 the rest of the Tree became a
+ * ghost and the structure a person selected within was no longer readable in
+ * context. 0.42 keeps the selection dominant while the surrounding Garden
+ * stays identifiable.
  */
 .garden-tree__node--dimmed {
-  opacity: 0.2;
+  opacity: 0.42;
 }
 
 /*
@@ -687,10 +1101,10 @@ body {
  */
 .garden-tree__kind {
   font-family: var(--metadata);
-  font-size: 10px;
-  letter-spacing: 0.08em;
+  font-size: 11px;
+  letter-spacing: 0.14em;
   text-transform: uppercase;
-  fill: color-mix(in srgb, var(--bark) 78%, transparent);
+  fill: color-mix(in srgb, var(--bark) 86%, transparent);
   paint-order: stroke;
   stroke: var(--canvas);
   stroke-width: 3px;
@@ -878,6 +1292,145 @@ body {
 .workspace__refresh:disabled {
   opacity: 0.6;
   cursor: default;
+}
+
+@media (max-width: 767px) {
+  .workspace__bar {
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    padding: 0.6rem 0.75rem;
+  }
+
+  .workspace__repository {
+    max-width: calc(100% - 4.5rem);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .workspace__tree-toggle {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 2.25rem;
+    padding: 0.35rem 0.7rem;
+    border: 1px solid color-mix(in srgb, var(--bark) 35%, transparent);
+    border-radius: 999px;
+    background: var(--canvas);
+    color: var(--bark);
+    font-family: var(--metadata);
+    cursor: pointer;
+  }
+
+  .workspace__search {
+    order: 3;
+    flex: 1 1 100%;
+  }
+
+  .workspace__search-input {
+    width: 100%;
+    max-width: none;
+    min-height: 2.5rem;
+  }
+
+  .workspace__panel-toggle,
+  .workspace__refresh {
+    min-height: 2.25rem;
+    margin-left: 0;
+  }
+
+  .workspace__panes {
+    display: block;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .workspace__tree--drawer {
+    position: fixed;
+    z-index: 3;
+    inset: 0 auto 0 0;
+    width: min(22rem, 88vw);
+    padding: 0.75rem;
+    background: var(--canvas);
+    border-right: 1px solid color-mix(in srgb, var(--lichen) 60%, transparent);
+    box-shadow: 8px 0 24px color-mix(in srgb, var(--bark) 22%, transparent);
+    transform: translateX(-105%);
+    transition: transform 160ms ease-out;
+  }
+
+  .workspace__tree--drawer.workspace__tree--open {
+    transform: translateX(0);
+  }
+
+  .workspace__drawer-close {
+    display: block;
+    margin: 0 0 0.5rem auto;
+    min-height: 2.25rem;
+    padding: 0.35rem 0.7rem;
+    border: 0;
+    background: transparent;
+    color: var(--canopy);
+    font-family: var(--control);
+    cursor: pointer;
+  }
+
+  .workspace__drawer-backdrop {
+    display: block;
+    position: fixed;
+    z-index: 2;
+    inset: 0;
+    width: 100%;
+    border: 0;
+    background: color-mix(in srgb, var(--bark) 25%, transparent);
+    cursor: default;
+  }
+
+  .workspace__panel {
+    min-height: 0;
+  }
+
+  .workspace__panel--sheet {
+    position: fixed;
+    z-index: 4;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    max-height: min(78vh, 44rem);
+    overflow: auto;
+    padding: 2.75rem 0.9rem 1.25rem;
+    border-radius: 1rem 1rem 0 0;
+    background: var(--canvas);
+    box-shadow: 0 -8px 28px color-mix(in srgb, var(--bark) 22%, transparent);
+  }
+
+  .workspace__sheet-backdrop {
+    display: block;
+    position: fixed;
+    z-index: 3;
+    inset: 0;
+    width: 100%;
+    border: 0;
+    background: color-mix(in srgb, var(--bark) 25%, transparent);
+    cursor: default;
+  }
+
+  .workspace__sheet-close {
+    display: block;
+    position: absolute;
+    top: 0.6rem;
+    right: 0.75rem;
+    min-height: 2.25rem;
+    padding: 0.35rem 0.7rem;
+    border: 0;
+    background: transparent;
+    color: var(--canopy);
+    font-family: var(--control);
+    cursor: pointer;
+  }
+
+  .change-tray {
+    padding: 0.65rem 0.75rem;
+  }
 }
 
 .garden-tree__diagnostic-mark {

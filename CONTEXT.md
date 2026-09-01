@@ -143,3 +143,23 @@ _Avoid_: Audit log, chat history, file history
 **Agent Access**:
 The explicitly enabled, session-scoped connection that registers Garden tools for ChatGPT and permits bounded Garden content to be returned through WebMCP actions.
 _Avoid_: Login, folder permission, account connection
+
+**Capability-Specific Support**:
+Research Garden is usable at every viewport size, while an action is available only when the current browser provides the capability that action genuinely requires. A missing capability is explained at that action; it never makes the whole Garden unavailable.
+_Avoid_: Desktop-only mode, viewport gate, pretend support
+
+**Live Folder Garden**:
+A Garden opened through a browser-provided writable directory handle. Garden Actions read and write the canonical Markdown directly in the selected Garden Repository.
+_Avoid_: Synced Garden, imported Garden, browser copy
+
+**Imported Garden**:
+A working copy of a Garden created from files selected through a browser import flow. Its source folder is not writable by Research Garden; canonical changes leave the working copy only through an explicit export.
+_Avoid_: Live Folder Garden, read-only preview, synced Garden
+
+**Imported Working Copy**:
+The browser-local, persistent copy of an Imported Garden. Garden Actions change this copy under the same validation and human-review rules as a Live Folder Garden until the person exports or discards it.
+_Avoid_: Sync cache, temporary preview, source folder
+
+**Export Garden Changes**:
+The explicit user-controlled action that produces an updated copy of an Imported Garden for the person to save or replace in their own file storage.
+_Avoid_: Sync, auto-save to folder, background write

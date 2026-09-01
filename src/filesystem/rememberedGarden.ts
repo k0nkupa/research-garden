@@ -61,8 +61,11 @@ function request<T>(operation: IDBRequest<T>): Promise<T> {
 export class IndexedDbRememberedGardenStore implements RememberedGardenStore {
   #open(): Promise<IDBDatabase> {
     return new Promise((resolve, reject) => {
-      const opening = indexedDB.open(DATABASE_NAME, 1)
-      opening.onupgradeneeded = () => opening.result.createObjectStore(STORE_NAME)
+      const opening = indexedDB.open(DATABASE_NAME, 2)
+      opening.onupgradeneeded = () => {
+        if (!opening.result.objectStoreNames.contains(STORE_NAME)) opening.result.createObjectStore(STORE_NAME)
+        if (!opening.result.objectStoreNames.contains('imported-garden')) opening.result.createObjectStore('imported-garden')
+      }
       opening.onsuccess = () => resolve(opening.result)
       opening.onerror = () => reject(opening.error)
     })

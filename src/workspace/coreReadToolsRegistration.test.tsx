@@ -25,7 +25,7 @@ schema_version: 1
 id: ${BRANCH}
 kind: branch
 title: Attention mechanisms
-state: active
+state: dormant
 created_at: ${CREATED}
 updated_at: ${CREATED}
 ---
@@ -124,13 +124,25 @@ describe('connecting', () => {
 
     const branch = screen.getByRole('treeitem', { name: /Attention mechanisms/ })
     await userEvent.click(branch)
-    await waitForRegisteredNames(registerTool, [...CORE_CONNECTED_NAMES, 'trace_evidence'])
-    expect((registerTool.mock.calls as [{ name: string }][]).at(-1)?.[0].name).toBe('trace_evidence')
+    await waitForRegisteredNames(registerTool, [
+      ...CORE_CONNECTED_NAMES,
+      'propose_move',
+      'propose_relation',
+      'trace_evidence',
+    ])
+    expect(registeredNames(registerTool)).toContain('trace_evidence')
 
     branch.focus()
     await userEvent.keyboard('f')
-    await waitForRegisteredNames(registerTool, [...CORE_CONNECTED_NAMES, 'trace_evidence', 'explore_branch'])
-    expect((registerTool.mock.calls as [{ name: string }][]).at(-1)?.[0].name).toBe('explore_branch')
+    await waitForRegisteredNames(registerTool, [
+      ...CORE_CONNECTED_NAMES,
+      'explore_branch',
+      'propose_harvest',
+      'propose_move',
+      'propose_relation',
+      'trace_evidence',
+    ])
+    expect(registeredNames(registerTool)).toContain('explore_branch')
   })
 
   it('refreshes the visible Tree after a successful direct Seed tool write', async () => {
@@ -184,6 +196,7 @@ describe('disconnecting', () => {
 
   it('clears the inspect gate on Disconnect and requires a fresh inspection after reconnect', async () => {
     const registerTool = vi.fn().mockResolvedValue(undefined)
+    grantWebMcp(registerTool)
     const fileSystem = new InMemoryGardenFileSystem({ 'branches/attention.md': branchFile }, 'my-garden')
     const index = await buildGardenIndex([{ path: ['branches', 'attention.md'], text: branchFile }])
     const proposed = await proposeChange(
@@ -248,7 +261,7 @@ describe('calling a registered tool after a rescan', () => {
     const SECOND = 'branch_01HQ8X2K3M4N5P6Q7R8S9T0S1W'
     await fileSystem.write(
       ['branches', 'second.md'],
-      `---\nschema_version: 1\nid: ${SECOND}\nkind: branch\ntitle: A second branch\nstate: active\ncreated_at: ${CREATED}\nupdated_at: ${CREATED}\n---\n\nAnother body.\n`,
+      `---\nschema_version: 1\nid: ${SECOND}\nkind: branch\ntitle: A second branch\nstate: dormant\ncreated_at: ${CREATED}\nupdated_at: ${CREATED}\n---\n\nAnother body.\n`,
     )
     window.dispatchEvent(new Event('focus'))
     await waitFor(() => expect(screen.getByText('A second branch')).toBeInTheDocument())

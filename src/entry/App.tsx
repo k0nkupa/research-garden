@@ -12,20 +12,16 @@ import { ApplicationShell } from './ApplicationShell'
 import { PermissionLapsed } from './PermissionLapsed'
 
 function readReadiness(): Readiness {
-  return resolveReadiness(detectCapabilities(window), {
-    width: window.innerWidth,
-    height: window.innerHeight,
-  })
+  return resolveReadiness(detectCapabilities(window))
 }
 
 /**
- * Wires live browser capability and viewport state into the shell, and holds
- * the open Garden for this session.
+ * Wires live browser capability state into the shell, and holds the open
+ * Garden for this session.
  *
- * Capabilities and viewport are re-read together on resize, and again on
- * `online`/`offline`: of the three signals resolveReadiness depends on,
- * connectivity is the one that legitimately changes mid-session (ADR 0072). A
- * browser does not gain or lose File System Access or WebMCP mid-page.
+ * Connectivity is re-read on `online`/`offline` because it can legitimately
+ * change mid-session (ADR 0072). File System Access and WebMCP do not depend
+ * on viewport size and do not change because a person resizes the window.
  *
  * `describe_research_garden` (ticket 17, ADR 0035) registers here,
  * unconditionally and once, independent of `readiness` or `session`: it is
@@ -42,23 +38,23 @@ export function App() {
     session,
     createFromPicker,
     openFromPicker,
+    openImportedFiles,
     openChosen,
     retryPermission,
     dismiss,
     remembered,
     resumeRemembered,
     forgetRemembered,
+    discardImported,
   } = useGardenSession()
 
   useEffect(() => {
     const resolve = () => setReadiness(readReadiness())
 
     resolve()
-    window.addEventListener('resize', resolve)
     window.addEventListener('online', resolve)
     window.addEventListener('offline', resolve)
     return () => {
-      window.removeEventListener('resize', resolve)
       window.removeEventListener('online', resolve)
       window.removeEventListener('offline', resolve)
     }
@@ -77,7 +73,7 @@ export function App() {
   }
 
   if (session.kind === 'open') {
-    return <Workspace garden={session.garden} agentInterface={readiness.agentInterface} />
+    return <Workspace garden={session.garden} agentInterface={readiness.agentInterface} sourceMode={session.sourceMode} onDiscardImported={discardImported} />
   }
 
   if (session.kind === 'already-a-garden') {
@@ -106,6 +102,7 @@ export function App() {
       readiness={readiness}
       onCreateGarden={createFromPicker}
       onOpenGarden={openFromPicker}
+      onImportGarden={openImportedFiles}
       busy={session.kind === 'working'}
       failure={session.kind === 'failed' ? session.message : undefined}
       remembered={remembered}
