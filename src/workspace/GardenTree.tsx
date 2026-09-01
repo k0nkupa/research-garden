@@ -3,7 +3,7 @@ import type { GardenIndex } from '../domain/index/gardenIndex'
 import { labelForKind } from '../domain/schema/kindLabels'
 import { labelForRelation } from '../domain/schema/relations'
 import { GLYPH_GEOMETRY, GLYPH_MARK, glyphForKind } from './kindGlyphs'
-import { computeTreeLayout, displayLabel, type TreeCrossLink } from './treeLayout'
+import { computeTreeLayout, displayLabel, type TreeCrossLink, type TreeProjection } from './treeLayout'
 import type { RelationType } from '../domain/schema/relations'
 import { edgeKey, isTracing, traceEvidence } from './evidenceTrace'
 import {
@@ -11,6 +11,7 @@ import {
   visibleTreeRows,
   treeKeyAction,
   UNFOCUSED,
+  type TreeRow,
   type TreeViewState,
 } from './treeView'
 
@@ -42,6 +43,16 @@ export interface GardenTreeProps {
   /** What the Tree is showing. View state only; nothing canonical (ADR 0014). */
   readonly view?: TreeViewState
   readonly onViewChange?: (view: TreeViewState) => void
+  /** Changes whenever the explorer enters a new branch, resetting pan/zoom. */
+  readonly scopeKey?: string | undefined
+  /**
+   * Rows to draw instead of deriving them from the view. Lets the explorer
+   * bound a Canopy to its own handful of leaves while keeping every part of
+   * the botanical rendering. When absent, the view decides the rows.
+   */
+  readonly rows?: readonly TreeRow[]
+  /** The overview map uses organic limbs; focused Trees keep analytical geometry. */
+  readonly projection?: TreeProjection
 }
 
 /**
@@ -82,6 +93,15 @@ const MAXIMUM_SCALE = 3
 const ZOOM_STEP = 1.15
 const PAN_START_DISTANCE = 4
 
+/**
+ * A limb's stroke width from the generation it belongs to.
+ *
+ * Depth 1 is a limb springing straight from the trunk, so it is the thickest
+ * thing that is not the trunk itself. Each further generation tapers, and the
+ * taper bottoms out so a deep Tree does not keep shrinking into invisibility.
+ */
+const limbStrokeFor = (depth: number) => Math.max(2.5, 6.5 - (depth - 1) * 1.25)
+
 interface Viewport {
   readonly x: number
   readonly y: number
@@ -119,11 +139,17 @@ export function GardenTree({
   onSelect,
   view = UNFOCUSED,
   onViewChange,
+  scopeKey,
+  rows: rowsOverride,
+  projection = 'default',
 }: GardenTreeProps) {
-  const rows = useMemo(() => visibleTreeRows(index, view), [index, view])
+  const rows = useMemo(
+    () => rowsOverride ?? visibleTreeRows(index, view),
+    [index, rowsOverride, view],
+  )
   // The rows are handed on rather than recomputed: walking the Tree twice per
   // view change is exactly the cost ADR 0061 asks to be bounded.
-  const layout = useMemo(() => computeTreeLayout(index, view, rows), [index, rows, view])
+  const layout = useMemo(() => computeTreeLayout(index, view, rows, projection), [index, rows, view, projection])
   const crossLinksByItem = useMemo(
     () => describeCrossLinksByItem(layout.crossLinks),
     [layout.crossLinks],
@@ -151,6 +177,12 @@ export function GardenTree({
   const svg = useRef<SVGSVGElement>(null)
   /** Set when a keypress moved the current node, so focus follows it there. */
   const followFocus = useRef(false)
+
+  useEffect(() => {
+    setViewport(AT_REST)
+    setKeyboardId(undefined)
+    panningFrom.current = undefined
+  }, [scopeKey])
 
   /**
    * Moving the tab order is not the same as moving focus.
@@ -306,12 +338,28 @@ export function GardenTree({
           the treeitem levels.
         */}
         <g className="garden-tree__form" aria-hidden="true">
+          {/* The ground lens sits behind everything, so the roots read as
+              emerging from the soil rather than lying on top of it. */}
+          <path
+            className="garden-tree__ground"
+            data-role="root-ground"
+            data-layer="structural"
+            d={layout.trunk.flarePath}
+          />
           <line
             className="garden-tree__soil"
             x1={layout.trunk.soilFrom}
             y1={layout.trunk.soilY}
             x2={layout.trunk.soilTo}
             y2={layout.trunk.soilY}
+          />
+          {/* The filled silhouette gives the trunk its taper; the strokes
+              below give it grain. Drawn first so the roots can reach over it. */}
+          <path
+            className="garden-tree__trunk-body"
+            data-role="trunk-body"
+            data-layer="structural"
+            d={layout.trunk.bodyPath}
           />
           {layout.trunk.rootPaths.map((path) => (
             <path
@@ -361,6 +409,10 @@ export function GardenTree({
                   className={dimmed ? 'garden-tree__link garden-tree__link--dimmed' : 'garden-tree__link'}
                   data-role="parent-limb"
                   data-layer="structural"
+                  // A limb thins as it grows outward: the trunk is the
+                  // thickest thing, the first generation tapers from it, and
+                  // each further generation recedes further (ADR 0043).
+                  style={{ strokeWidth: limbStrokeFor(link.depth) }}
                   d={link.path}
                 />
                 <path
@@ -465,6 +517,10 @@ export function GardenTree({
               onFocus={() => setKeyboardId(node.id)}
               onKeyDown={(event) => handleKey(event, node.id)}
             >
+              {/* The inner group is the hover surface. A CSS transform here is
+                  safe, unlike on the node group itself, whose translate
+                  attribute would be overridden by any CSS transform. */}
+              <g className="garden-tree__node-body">
               <path
                 className={`garden-tree__glyph garden-tree__glyph--${glyph.tone}${
                   glyph.filled ? ' garden-tree__glyph--filled' : ''
@@ -512,14 +568,15 @@ export function GardenTree({
                 the glyph, and a person scanning a Tree of eight forms should
                 not have to remember which is which.
               */}
-              <text className="garden-tree__kind" y={-19} textAnchor="middle" aria-hidden="true">
+              <text className="garden-tree__kind" y={-21} textAnchor="middle" aria-hidden="true">
                 {labelForKind(node.kind)}
               </text>
 
               {/* The full title stays in the node's accessible name above. */}
-              <text className="garden-tree__label" y={30} textAnchor="middle">
+              <text className="garden-tree__label" y={33} textAnchor="middle">
                 {displayLabel(node.title)}
               </text>
+              </g>
             </g>
           )
         })}

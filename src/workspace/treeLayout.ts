@@ -31,6 +31,8 @@ export interface TreeLink {
   /** Absent when the limb springs from the trunk rather than from an item. */
   readonly sourceId: string | undefined
   readonly targetId: string
+  /** The target's depth, so strokes can taper as the Tree grows outward. */
+  readonly depth: number
   readonly path: string
 }
 
@@ -70,6 +72,17 @@ export interface TreeTrunk {
   readonly path: string
   /** A fine inner stroke that gives the permanent trunk its engraved grain. */
   readonly detailPath: string
+  /**
+   * A filled, tapering body that gives the trunk its silhouette.
+   *
+   * The stroke paths alone read as a wire; a body that widens toward the soil
+   * reads as a growing thing. ADR 0043 wants a recognizable botanical form,
+   * and the taper is the part that makes the difference between a line and a
+   * trunk. Decorative, so it is kept out of the accessible structure.
+   */
+  readonly bodyPath: string
+  /** A filled flare where the trunk meets the soil, spreading into the roots. */
+  readonly flarePath: string
   /** The spreading roots below the soil line. */
   readonly rootPaths: readonly string[]
   /** Fine root hairs, derived alongside the spreading roots. */
@@ -86,6 +99,8 @@ export interface TreeLayout {
   readonly trunk: TreeTrunk
   readonly viewBox: TreeViewBox
 }
+
+export type TreeProjection = 'default' | 'overview' | 'nested'
 
 /** Horizontal room per sibling and vertical room per generation, in SVG units. */
 const SIBLING_SPACING = 180
@@ -170,6 +185,7 @@ export function computeTreeLayout(
   view: TreeViewState = UNFOCUSED,
   /** Passed in when the caller already has them, so the Tree is walked once. */
   rows: readonly TreeRow[] = visibleTreeRows(index, view),
+  projection: TreeProjection = 'default',
 ): TreeLayout {
   const shown = new Map(rows.map((row) => [row.id, row]))
 
@@ -220,6 +236,26 @@ export function computeTreeLayout(
   /** Depth 1 lands one drop below the soil, and hangs further down from there. */
   const understoryY = (depth: number) => SOIL_Y + ROOT_DROP + (depth - 1) * GENERATION_SPACING
 
+  const overviewOffsets = [-26, 18, 34, -14, 28]
+  const overviewLifts = [42, 108, 62, 132, 78]
+
+  const overviewPosition = (nodeId: string, baseX: number, fallbackY: number): Point => {
+    const position = topLevel.findIndex((row) => row.id === nodeId)
+    if (position < 0) return { x: baseX, y: fallbackY }
+    return {
+      x: baseX + (overviewOffsets[position % overviewOffsets.length] ?? 0),
+      y: fallbackY - (overviewLifts[position % overviewLifts.length] ?? 0),
+    }
+  }
+
+  const nestedPosition = (nodeId: string, baseX: number, baseY: number, depth: number): Point => {
+    if (projection !== 'nested' || depth < 2) return { x: baseX, y: baseY }
+    const seed = stableGeometrySeed(nodeId)
+    const sway = ((seed % 1000) / 1000 - 0.5) * 54
+    const lift = 12 + ((seed >>> 9) % 4) * 9
+    return { x: baseX + sway, y: baseY - lift }
+  }
+
   const placedIn = (
     positioned: ReturnType<typeof layOut>,
     yFor: (depth: number) => number,
@@ -229,6 +265,10 @@ export function computeTreeLayout(
       .filter((node) => node.data.id !== TRUNK)
       .map((node) => {
         const row = shown.get(node.data.id as string)
+        const overview = projection === 'overview' && node.depth === 1
+          ? overviewPosition(node.data.id as string, node.x, yFor(node.depth))
+          : undefined
+        const nested = nestedPosition(node.data.id as string, node.x, yFor(node.depth), node.depth)
 
         return {
           id: node.data.id as string,
@@ -237,8 +277,8 @@ export function computeTreeLayout(
           kind: node.data.kind as GardenItemKind,
           // The synthetic trunk occupies depth 0, so a top-level item reads as depth 1.
           depth: node.depth,
-          x: node.x,
-          y: node.data.kind === 'seed' ? SOIL_Y + SEED_DEPTH : yFor(node.depth),
+          x: overview?.x ?? nested.x,
+          y: node.data.kind === 'seed' ? SOIL_Y + SEED_DEPTH : overview?.y ?? nested.y,
           dormant: row?.dormant ?? false,
           hasChildren: row?.hasChildren ?? false,
           expanded: row?.expanded ?? false,
@@ -263,21 +303,32 @@ export function computeTreeLayout(
           {
             sourceId: source.id,
             targetId: target.id,
-            path: verticalPath(source, target),
+            depth: target.depth,
+            path: projection === 'nested' ? nestedLimbPath(source, target) : verticalPath(source, target, true),
           },
         ]
       })
 
   const links: TreeLink[] = [...linksIn(canopy), ...linksIn(understory)]
 
-  // Limbs from the trunk out to whatever stands directly on it.
+  // Limbs from the trunk out to whatever stands directly on it. The seam stays
+  // on the trunk itself, so the source is never pulled back to a glyph edge.
   for (const row of topLevel) {
     const node = positionOf.get(row.id)
     if (!node) continue
 
     const fromTrunk = { x: 0, y: isBuried(row.kind) ? SOIL_Y : SOIL_Y - TRUNK_HEIGHT }
+    const topLevelPosition = topLevel.findIndex((candidate) => candidate.id === row.id)
 
-    links.push({ sourceId: undefined, targetId: node.id, path: verticalPath(fromTrunk, node) })
+    links.push({
+      sourceId: undefined,
+      targetId: node.id,
+      depth: node.depth,
+      path:
+        projection === 'overview' && !isBuried(row.kind)
+          ? overviewLimbPath(fromTrunk, node, topLevelPosition)
+          : verticalPath(fromTrunk, node, false),
+    })
   }
 
   const crossLinks: TreeCrossLink[] = index.graph.relationships
@@ -305,6 +356,49 @@ export function computeTreeLayout(
 }
 
 /**
+ * Overview limbs are deliberately more organic than the focused Tree's
+ * analytical joins. Each one leaves the crown with a different sweep and
+ * arrives at a different height, so the map reads as a living canopy rather
+ * than a row of identical branches.
+ */
+function overviewLimbPath(from: Point, target: TreeNode, position: number): string {
+  const bends = [-54, 38, 72, -34, 58]
+  const rises = [42, 76, 58, 92, 64]
+  const bend = bends[position % bends.length] ?? 0
+  const rise = rises[position % rises.length] ?? 0
+  const direction = target.x === 0 ? (position % 2 === 0 ? -1 : 1) : Math.sign(target.x)
+  const firstControlX = target.x * 0.28 + bend
+  const secondControlX = target.x * 0.74 + bend * 0.45 + direction * 10
+
+  return `M${from.x},${from.y} C${firstControlX},${from.y - rise} ${secondControlX},${target.y + 34} ${target.x},${target.y}`
+}
+
+/** Stable integer derived from identity; deliberately independent of render order. */
+function stableGeometrySeed(value: string): number {
+  let hash = 2166136261
+  for (let index = 0; index < value.length; index += 1) {
+    hash ^= value.charCodeAt(index)
+    hash = Math.imul(hash, 16777619)
+  }
+  return hash >>> 0
+}
+
+/** Organic child limb with identity-seeded departure and curvature. */
+export function nestedLimbPath(source: TreeNode, target: TreeNode): string {
+  const seed = stableGeometrySeed(target.id)
+  const side = ((seed % 9) - 4) * 7
+  const bend = ((seed >>> 8) % 7) - 3
+  const end = pullBackToward(target, source, NODE_EDGE_INSET)
+  const dx = end.x - source.x
+  const dy = end.y - source.y
+  const firstX = source.x + dx * 0.28 + side
+  const firstY = source.y + dy * 0.3 - 18 - ((seed >>> 16) % 18)
+  const secondX = source.x + dx * 0.78 + bend * 10
+  const secondY = source.y + dy * 0.82 + side * 0.18
+  return `M${source.x},${source.y} C${firstX},${firstY} ${secondX},${secondY} ${end.x},${end.y}`
+}
+
+/**
  * The trunk, its root flare, and the soil line.
  *
  * Sized from what is actually drawn so the soil always spans the Garden and the
@@ -319,25 +413,62 @@ function trunkFor(nodes: readonly TreeNode[]): TreeTrunk {
   const soilTo = Math.max(SIBLING_SPACING, ...xs) + SIBLING_SPACING / 2
   const deepest = buried.length === 0 ? SOIL_Y + ROOT_DROP : Math.max(...buried.map((n) => n.y))
 
+  // The crown is the width of the trunk where it meets the soil, and the flare
+  // is how far it widens into the ground. Kept in one place so the silhouette
+  // and the roots agree about where the trunk stops being a trunk.
+  const crownHalfWidth = SIBLING_SPACING * 0.13
+  const flareReach = SIBLING_SPACING * 0.32
+  const flareDepth = SOIL_Y + 30
+
   return {
     // The organic curve reaches the top-level limb seam at -TRUNK_HEIGHT. It
     // remains clear of the first node while removing the old 30-unit gap.
     path: `M0,${SOIL_Y + 18} C-7,${SOIL_Y - 23} -7,${SOIL_Y - 91} 2,${SOIL_Y - TRUNK_HEIGHT}`,
     detailPath: `M1,${SOIL_Y + 14} C-2,${SOIL_Y - 27} -3,${SOIL_Y - 93} 3,${SOIL_Y - TRUNK_HEIGHT + 5}`,
     /*
-     * Fine rootlets, kept deliberately short. The limbs down to the evidence
-     * are the real root system; these only suggest the rest of it. Drawing
-     * them as far as the nodes would duplicate those limbs, which is precisely
-     * the decoration ADR 0043 asks to reduce.
+     * A filled silhouette, so the trunk tapers instead of reading as a wire.
+     * The stroke paths above give it grain; this gives it body: narrow at the
+     * limb seam, widening through the soil, and flaring into the root crown.
+     * One closed path, so it is cheap to fill and stays a single form.
      */
-    rootPaths: [-1, -0.4, 0.4, 1].map((spread) => {
-      const toX = spread * SIBLING_SPACING * 0.55
-      const toY = SOIL_Y + (deepest - SOIL_Y) * 0.4
-      return `M0,${SOIL_Y} C${toX * 0.2},${SOIL_Y + 26} ${toX * 0.65},${toY * 0.7} ${toX},${toY}`
+    bodyPath: [
+      `M-3,${SOIL_Y - TRUNK_HEIGHT}`,
+      `C-9,${SOIL_Y - 95} -11,${SOIL_Y - 45} -${crownHalfWidth},${SOIL_Y}`,
+      `C-${crownHalfWidth},${SOIL_Y + 12} -${crownHalfWidth * 1.6},${SOIL_Y + 20} -${flareReach},${flareDepth}`,
+      `C-${flareReach * 0.6},${flareDepth - 6} -${crownHalfWidth * 0.7},${flareDepth - 8} -${crownHalfWidth * 0.4},${flareDepth - 9}`,
+      `L${crownHalfWidth * 0.4},${flareDepth - 9}`,
+      `C${crownHalfWidth * 0.7},${flareDepth - 8} ${flareReach * 0.6},${flareDepth - 6} ${flareReach},${flareDepth}`,
+      `C${crownHalfWidth * 1.6},${SOIL_Y + 20} ${crownHalfWidth},${SOIL_Y + 12} ${crownHalfWidth},${SOIL_Y}`,
+      `C11,${SOIL_Y - 45} 9,${SOIL_Y - 95} 7,${SOIL_Y - TRUNK_HEIGHT}`,
+      'Z',
+    ].join(' '),
+    /*
+     * The ground the trunk rises from: a flat lens under the soil that widens
+     * the base beyond the crown, so the tree reads as planted rather than
+     * dropped on the line. Drawn behind the body and the roots.
+     */
+    flarePath: [
+      `M0,${SOIL_Y + 2}`,
+      `C-${flareReach * 0.9},${SOIL_Y + 8} -${flareReach * 1.25},${SOIL_Y + 20} -${flareReach * 1.35},${flareDepth + 4}`,
+      `C-${flareReach * 0.9},${flareDepth - 4} -${flareReach * 0.4},${flareDepth - 6} 0,${flareDepth - 7}`,
+      `C${flareReach * 0.4},${flareDepth - 6} ${flareReach * 0.9},${flareDepth - 4} ${flareReach * 1.35},${flareDepth + 4}`,
+      `C${flareReach * 1.25},${SOIL_Y + 20} ${flareReach * 0.9},${SOIL_Y + 8} 0,${SOIL_Y + 2}`,
+      'Z',
+    ].join(' '),
+    /*
+     * Rootlets from the crown out to the evidence below. Kept shorter than the
+     * limbs down to the evidence, which are the real root system; these only
+     * suggest the rest of it. Drawing them as far as the nodes would duplicate
+     * those limbs, which is precisely the decoration ADR 0043 asks to reduce.
+     */
+    rootPaths: [-1, -0.45, 0.45, 1].map((spread) => {
+      const toX = spread * SIBLING_SPACING * 0.58
+      const toY = SOIL_Y + (deepest - SOIL_Y) * 0.42
+      return `M0,${SOIL_Y} C${toX * 0.2},${SOIL_Y + 26} ${toX * 0.68},${toY * 0.72} ${toX},${toY}`
     }),
-    rootHairPaths: [-1, -0.4, 0.4, 1].map((spread) => {
-      const toX = spread * SIBLING_SPACING * 0.55
-      const toY = SOIL_Y + (deepest - SOIL_Y) * 0.4
+    rootHairPaths: [-1, -0.45, 0.45, 1].map((spread) => {
+      const toX = spread * SIBLING_SPACING * 0.58
+      const toY = SOIL_Y + (deepest - SOIL_Y) * 0.42
       const direction = toX < 0 ? -1 : 1
       return `M${toX},${toY} l${direction * 16},6 M${toX},${toY} l${direction * 9},12`
     }),
@@ -356,12 +487,14 @@ function trunkFor(nodes: readonly TreeNode[]): TreeTrunk {
  * distinguishable from the Tree's own structure.
  */
 function bowedPath(source: TreeNode, target: TreeNode): string {
-  const midX = (source.x + target.x) / 2
-  const midY = (source.y + target.y) / 2
-  const span = Math.hypot(target.x - source.x, target.y - source.y)
+  const from = pullBackToward(source, target, NODE_EDGE_INSET)
+  const to = pullBackToward(target, source, NODE_EDGE_INSET)
+  const midX = (from.x + to.x) / 2
+  const midY = (from.y + to.y) / 2
+  const span = Math.hypot(to.x - from.x, to.y - from.y)
   const bow = Math.min(span / 4, 90)
 
-  return `M${source.x},${source.y} Q${midX},${midY + bow} ${target.x},${target.y}`
+  return `M${from.x},${from.y} Q${midX},${midY + bow} ${to.x},${to.y}`
 }
 
 interface Point {
@@ -369,10 +502,38 @@ interface Point {
   readonly y: number
 }
 
-/** A smooth vertical join, so limbs read as growth rather than as a flowchart. */
-function verticalPath(source: Point, target: Point): string {
-  const midway = (source.y + target.y) / 2
-  return `M${source.x},${source.y} C${source.x},${midway} ${target.x},${midway} ${target.x},${target.y}`
+/**
+ * How far a limb pulls back from a node's centre before it lands.
+ *
+ * Glyphs are roughly 20 units across, so a limb drawn to the exact centre
+ * disappears behind the glyph and its join reads as a collision rather than a
+ * connection. Pulling both ends back to the glyph's edge makes the attachment
+ * visible. The trunk is not a node: a limb springing from it keeps its seam
+ * point, which the tests pin to the trunk geometry.
+ */
+const NODE_EDGE_INSET = 12
+
+/**
+ * A smooth vertical join, so limbs read as growth rather than as a flowchart.
+ *
+ * `insetSource` is false only for limbs springing from the trunk, whose seam
+ * is a point on the trunk itself rather than the centre of a glyph.
+ */
+function verticalPath(source: Point, target: Point, insetSource = true): string {
+  const start = insetSource ? pullBackToward(source, target, NODE_EDGE_INSET) : source
+  const end = pullBackToward(target, source, NODE_EDGE_INSET)
+  const midway = (start.y + end.y) / 2
+  return `M${start.x},${start.y} C${start.x},${midway} ${end.x},${midway} ${end.x},${end.y}`
+}
+
+/** Moves `from` toward `to` by `distance`, stopping short if they are close. */
+function pullBackToward(from: Point, to: Point, distance: number): Point {
+  const dx = to.x - from.x
+  const dy = to.y - from.y
+  const span = Math.hypot(dx, dy)
+  if (span === 0) return from
+  const pull = Math.min(distance, span / 2)
+  return { x: from.x + (dx / span) * pull, y: from.y + (dy / span) * pull }
 }
 
 /**
