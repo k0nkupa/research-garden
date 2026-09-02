@@ -49,6 +49,28 @@ function directThreadItems(index: GardenIndex, branchId: string) {
     .filter((item) => item.kind !== 'branch') ?? []
 }
 
+function descendantLeafItems(index: GardenIndex, branchId: string) {
+  const leaves = [] as NonNullable<ReturnType<typeof directThreadItems>[number]>[]
+  const visit = (id: string): void => {
+    const indexed = index.items.get(id)
+    if (!indexed) return
+    const children = [...indexed.childIds].sort((left, right) => {
+      const leftItem = index.items.get(left)?.item
+      const rightItem = index.items.get(right)?.item
+      const titleOrder = (leftItem?.title ?? '').localeCompare(rightItem?.title ?? '')
+      return titleOrder === 0 ? left.localeCompare(right) : titleOrder
+    })
+    for (const childId of children) {
+      const child = index.items.get(childId)?.item
+      if (!child) continue
+      if (child.kind === 'branch') visit(childId)
+      else leaves.push(child)
+    }
+  }
+  visit(branchId)
+  return leaves
+}
+
 export function nestedBranchIds(index: GardenIndex, branchId: string): readonly string[] {
   return index.items.get(branchId)?.childIds
     .filter((id) => index.items.get(id)?.item.kind === 'branch')
@@ -119,7 +141,7 @@ export function overviewEntries(index: GardenIndex, page = 0): readonly Overview
   return index.topLevelIds
     .map((id) => index.items.get(id)?.item)
     .filter((item): item is NonNullable<typeof item> => item?.kind === 'branch' && item.state === 'active')
-    .map((branch) => ({ id: branch.id, title: branch.title, count: directThreadItems(index, branch.id).length }))
+    .map((branch) => ({ id: branch.id, title: branch.title, count: descendantLeafItems(index, branch.id).length }))
     .slice(page * MAX_BRANCHES_ON_MAP, (page + 1) * MAX_BRANCHES_ON_MAP)
 }
 
@@ -149,6 +171,33 @@ export function overviewTreeRows(index: GardenIndex, page = 0): readonly TreeRow
     .filter((row) => entryIds.has(row.id))
 }
 
+/** Number of readable pages in a focused research thread. */
+export function branchTreePageCount(index: GardenIndex, branchId: string): number {
+  return Math.max(1, Math.ceil(descendantLeafItems(index, branchId).length / MAX_ITEMS_PER_CANOPY))
+}
+
+/** Rows for a focused Branch: its bounded descendant leaves and their Branch path. */
+export function branchTreeRows(index: GardenIndex, branchId: string, page = 0): readonly TreeRow[] {
+  const indexedBranch = index.items.get(branchId)
+  if (!indexedBranch || indexedBranch.item.kind !== 'branch') return []
+
+  const pageItems = descendantLeafItems(index, branchId)
+    .slice(page * MAX_ITEMS_PER_CANOPY, (page + 1) * MAX_ITEMS_PER_CANOPY)
+  const visibleIds = new Set(pageItems.map((item) => item.id))
+  const includeAncestors = (id: string): void => {
+    for (const [candidateId, candidate] of index.items) {
+      if (!candidate.childIds.includes(id)) continue
+      visibleIds.add(candidateId)
+      if (candidateId !== branchId) includeAncestors(candidateId)
+    }
+  }
+  for (const item of pageItems) includeAncestors(item.id)
+  visibleIds.add(branchId)
+
+  return visibleTreeRows(index, { collapsedIds: new Set(), focusedId: branchId })
+    .filter((row) => visibleIds.has(row.id))
+}
+
 /**
  * Rows for a Canopy projection: the owning Branch plus exactly its leaves.
  *
@@ -171,7 +220,7 @@ export function scopedItemIds(
   _view: TreeViewState,
 ): readonly string[] {
   if (scope.kind === 'overview') return overviewEntries(index, scope.page ?? 0).map((entry) => entry.id)
-  if (scope.kind === 'branch') return allCanopyEntries(index, scope.id).flatMap((canopy) => canopy.itemIds)
+  if (scope.kind === 'branch') return descendantLeafItems(index, scope.id).map((item) => item.id)
   return canopyEntry(index, scope.branchId, scope.canopyId)?.itemIds ?? []
 }
 
@@ -183,7 +232,10 @@ export function scopeLabel(index: GardenIndex, scope: ExploreScope): string {
 
 export function scopeDescription(index: GardenIndex, scope: ExploreScope): string {
   if (scope.kind === 'overview') return 'Choose a living research thread'
-  if (scope.kind === 'branch') return `${scopeLabel(index, scope)} research thread`
+  if (scope.kind === 'branch') {
+    const count = descendantLeafItems(index, scope.id).length
+    return `${scopeLabel(index, scope)} research thread, ${count} ${count === 1 ? 'leaf' : 'leaves'}`
+  }
   const count = scopedItemIds(index, scope, { collapsedIds: new Set(), focusedId: undefined }).length
   return `${scopeLabel(index, scope)}, ${count} ${count === 1 ? 'leaf' : 'leaves'}`
 }
