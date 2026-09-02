@@ -3,6 +3,8 @@ import { useEffect, useRef, type RefObject } from 'react'
 import { GardenTree } from './GardenTree'
 import {
   allCanopyEntries,
+  branchTreePageCount,
+  branchTreeRows,
   canopyEntries,
   canopyTreeRows,
   MAX_CANOPIES_PER_THREAD,
@@ -94,6 +96,7 @@ export function GardenExplorer({
           onSelect={selectFromTree}
           onViewChange={handleViewChange}
           onOpenCanopy={(canopyId) => onOpenScope({ kind: 'canopy', branchId: scope.id, canopyId })}
+          onPageChange={(page) => onOpenScope({ kind: 'branch', id: scope.id, page })}
           headingRef={headingRef}
         />
       )}
@@ -170,6 +173,7 @@ interface LivingThreadTreeProps {
   readonly onSelect: (id: string) => void
   readonly onViewChange: (view: TreeViewState) => void
   readonly onOpenCanopy: (canopyId: string) => void
+  readonly onPageChange: (page: number) => void
   readonly headingRef: RefObject<HTMLHeadingElement | null>
 }
 
@@ -178,16 +182,24 @@ interface LivingThreadTreeProps {
  * the semantic Canopies it carries. Choosing a Canopy bounds the drawing to
  * that kind's own leaves; the Tree stays the canvas either way.
  */
-function LivingThreadTree({ index, branchId, page, selectedId, diagnosedIds, view, onSelect, onViewChange, onOpenCanopy, headingRef }: LivingThreadTreeProps) {
+function LivingThreadTree({ index, branchId, page, selectedId, diagnosedIds, view, onSelect, onViewChange, onOpenCanopy, onPageChange, headingRef }: LivingThreadTreeProps) {
   const branch = index.items.get(branchId)?.item
   const canopies = canopyEntries(index, branchId)
   const canopiesCount = allCanopyEntries(index, branchId).length
+  const pages = branchTreePageCount(index, branchId)
   return (
     <section className="living-tree" aria-labelledby="living-tree-title">
       <div className="living-tree__intro">
         <p className="garden-overview__eyebrow">Living research thread</p>
         <h2 id="living-tree-title" ref={headingRef} tabIndex={-1}>{branch?.title ?? 'Research thread'}</h2>
         <p>{branch?.body || 'Choose a limb to explore the questions, claims, and observations it carries.'}</p>
+        {pages > 1 && (
+          <div className="garden-overview__pages" aria-label={`${branch?.title ?? 'Research thread'} pages`}>
+            <button type="button" disabled={page === 0} onClick={() => onPageChange(page - 1)}>Previous leaves</button>
+            <span>Leaves {page + 1} of {pages}</span>
+            <button type="button" disabled={page + 1 >= pages} onClick={() => onPageChange(page + 1)}>More leaves</button>
+          </div>
+        )}
         {canopies.length > 0 && (
           <nav className="living-tree__canopies" aria-label={`${branch?.title ?? 'Research thread'} canopies`}>
             {canopies.map((canopy) => (
@@ -214,6 +226,7 @@ function LivingThreadTree({ index, branchId, page, selectedId, diagnosedIds, vie
         onSelect={onSelect}
         view={{ ...view, focusedId: branchId }}
         onViewChange={onViewChange}
+        rows={branchTreeRows(index, branchId, page)}
         projection="nested"
         scopeKey={`branch:${branchId}:${page}`}
       />
